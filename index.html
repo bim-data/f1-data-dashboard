@@ -1480,6 +1480,18 @@ async function selectMeeting(key) {
         updateBreadcrumb(); 
         showView('view-team-profile');
       };
+    } else if (originId === 'view-driver-detail') {
+      // NEW: Catch users coming from the telemetry page and send them right back
+      backBtn.textContent = '← Back to Driver';
+      backBtn.onclick = () => {
+        // We call viewDriverDetails again to safely rebuild their telemetry view 
+        // using the currently active session
+        if (typeof currentDriverView !== 'undefined' && currentDriverView) {
+            viewDriverDetails(currentDriverView);
+        } else {
+            showView('view-driver-detail');
+        }
+      };
     } else {
       backBtn.textContent = '← Back to Season';
       backBtn.onclick = goHome;
@@ -1940,7 +1952,16 @@ async function viewDriverDetails(driverNumber) {
 
   // Update consistent Athlete Badge header
   updateDriverHeader('detail-driver-title', driverObj);
-  document.getElementById('detail-driver-sub').textContent = currentSession ? `${currentMeeting.circuit_short_name} · ${currentSession.session_name}` : 'Session';
+  // NEW: Make the location/session text a clickable link to the main Race Weekend page
+  const subText = `${currentMeeting.location} &middot; ${getShortSessionName(currentSession.session_name)}`;
+  document.getElementById('detail-driver-sub').innerHTML = `
+    <span onclick="selectMeeting(${currentMeeting.meeting_key})" 
+          style="cursor:pointer; border-bottom: 1px dotted var(--text-dim); transition: all 0.2s ease; padding-bottom: 1px;"
+          onmouseover="this.style.color='var(--text)'; this.style.borderBottomColor='var(--text)';" 
+          onmouseout="this.style.color='var(--text-dim)'; this.style.borderBottomColor='var(--text-dim)';">
+      ${subText}
+    </span>
+  `;
 
   // Show/hide Positions Gained/Lost tab based on session type
   updateDriverSubTabsForSession();
