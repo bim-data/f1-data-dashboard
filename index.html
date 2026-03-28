@@ -2325,17 +2325,26 @@ async function openDriverProfile(driverNumber) {
       const roundText = meeting ? (meeting.is_testing ? 'TEST' : `RW${meeting.race_week}`) : '';
       const dateString = meeting ? `${fmtDate(meeting.date_start)} - ${fmtDate(meeting.date_end)}` : '';
       
-      // Safely initialize to an empty string so "undefined" never prints!
+      // 1. Color-Code the Practice Sessions
       let badgeHtml = ''; 
       if (n.includes('sprint')) {
         badgeHtml = `<span style="background:#E87D2B; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">${s.session_name}</span>`;
       } else if (isPrac) {
-        badgeHtml = `<span style="background:var(--text-muted); color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">${s.session_name}</span>`;
+        let pColor = 'var(--text-muted)'; // Fallback Grey
+        if (n.includes('1')) pColor = '#4A90E2'; // Light Blue for FP1
+        else if (n.includes('2')) pColor = '#9013FE'; // Purple for FP2
+        else if (n.includes('3')) pColor = '#00A86B'; // Green for FP3
+        
+        badgeHtml = `<span style="background:${pColor}; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">${s.session_name}</span>`;
       }
+
+      // 2. Build the flag using your actual flag-icons URL logic!
+      const flagUrl = meeting && meeting.country_name ? `https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${getCountryCode(meeting.country_name)}.svg` : '';
+      const flagHtml = flagUrl ? `<img src="${flagUrl}" style="width:20px; height:auto; border-radius:2px; box-shadow:0 1px 3px rgba(0,0,0,0.2); margin-right:8px; vertical-align:middle; display:inline-block;">` : '';
 
       let myPos = 'DNF';
       let ptsGained = 0;
-      let timingHtml = ''; // Initialize the new timing block
+      let timingHtml = '';// Initialize the new timing block
 
       if (isRace) {
         const validLaps = myRaceLaps.filter(l => l.lap_duration && l.lap_duration > 0);
@@ -2421,7 +2430,7 @@ async function openDriverProfile(driverNumber) {
           
           <div style="display:flex; flex-direction:column; justify-content:center;">
             <div style="font-weight:700; font-family:'Barlow Condensed', sans-serif; font-size:1.1rem; text-transform:uppercase; display:flex; align-items:center;">
-              ${meeting ? meeting.meeting_name : 'Unknown'} ${badgeHtml}
+              ${flagHtml}${meeting ? meeting.meeting_name : 'Unknown'} ${badgeHtml}
             </div>
             <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
               ${dateString}
@@ -2918,13 +2927,17 @@ async function openTeamProfile(teamName) {
       const dateString = meeting ? `${fmtDate(meeting.date_start)} - ${fmtDate(meeting.date_end)}` : '';
       const badgeHtml = isSprint ? `<span style="background:#E87D2B; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle;">SPRINT</span>` : '';
 
+      // Build the flag
+      const flagUrl = meeting && meeting.country_name ? `https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${getCountryCode(meeting.country_name)}.svg` : '';
+      const flagHtml = flagUrl ? `<img src="${flagUrl}" style="width:20px; height:auto; border-radius:2px; box-shadow:0 1px 3px rgba(0,0,0,0.2); margin-right:8px; vertical-align:middle; display:inline-block;">` : '';
+
       rowHtmls.push(`
         <div class="driver-row" style="grid-template-columns: 2.5rem 1fr auto;" onclick="selectMeeting(${meeting.meeting_key})">
           <div style="font-family:'Barlow Condensed', sans-serif; color:var(--text-dim); font-weight:700;">${roundText}</div>
           
           <div style="display:flex; flex-direction:column; justify-content:center;">
             <div style="font-weight:700; font-family:'Barlow Condensed', sans-serif; font-size:1.1rem; text-transform:uppercase; display:flex; align-items:center;">
-              ${meeting ? meeting.meeting_name : 'Unknown'} ${badgeHtml}
+              ${flagHtml}${meeting ? meeting.meeting_name : 'Unknown'} ${badgeHtml}
             </div>
             <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
               ${dateString}
