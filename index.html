@@ -375,6 +375,7 @@
           <button class="subtab-btn active" id="profile-subtab-btn-results" onclick="switchProfileSubTab('results')">Season Results</button>
           <button class="subtab-btn" id="profile-subtab-btn-quali" onclick="switchProfileSubTab('quali')">Qualifying</button>
           <button class="subtab-btn" id="profile-subtab-btn-practice" onclick="switchProfileSubTab('practice')">Practice</button>
+          <button class="subtab-btn" id="profile-subtab-btn-championship" onclick="switchProfileSubTab('championship')">Championship Battle</button>
         </div>
         
         <div id="profile-subtabs-wrapper">
@@ -386,6 +387,9 @@
           </div>
           <div id="profile-subtab-content-practice" class="subtab-content">
             <div id="profile-practice-list" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+          </div>
+          <div id="profile-subtab-content-championship" class="subtab-content">
+            <div style="color:var(--text-dim); padding:2rem 1rem; text-align:center;">Championship dashboard coming soon...</div>
           </div>
         </div>
       </div>
@@ -404,8 +408,19 @@
         <div class="standings-title" style="margin-bottom: 1rem;">Drivers</div>
         <div id="profile-team-drivers" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2.5rem;"></div>
 
-        <div class="standings-title" style="margin-bottom: 1rem;">Season Results</div>
-        <div id="profile-team-results-list" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+        <div id="team-subtabs-container" class="subtabs">
+          <button class="subtab-btn active" id="team-subtab-btn-results" onclick="switchTeamSubTab('results')">Season Results</button>
+          <button class="subtab-btn" id="team-subtab-btn-championship" onclick="switchTeamSubTab('championship')">Championship Battle</button>
+        </div>
+        
+        <div id="team-subtabs-wrapper">
+          <div id="team-subtab-content-results" class="subtab-content active">
+            <div id="profile-team-results-list" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+          </div>
+          <div id="team-subtab-content-championship" class="subtab-content">
+             <div style="color:var(--text-dim); padding:2rem 1rem; text-align:center;">Championship dashboard coming soon...</div>
+          </div>
+        </div>
       </div>
 
       <div class="view" id="view-driver-detail">
@@ -524,19 +539,19 @@ const TEAM_COLORS = {
 };
 
 const TEAM_INFO = {
-  'Red Bull Racing': { full: 'Oracle Red Bull Racing', principal: 'Laurent Mekies', base: 'Milton Keynes, United Kingdom' },
-  'Ferrari': { full: 'Scuderia Ferrari', principal: 'Frédéric Vasseur', base: 'Maranello, Italy' },
-  'Mercedes': { full: 'Mercedes-AMG PETRONAS F1 Team', principal: 'Toto Wolff', base: 'Brackley, United Kingdom' },
-  'McLaren': { full: 'McLaren Formula 1 Team', principal: 'Andrea Stella', base: 'Woking, United Kingdom' },
-  'Aston Martin': { full: 'Aston Martin Aramco F1 Team', principal: 'Adrian Newey', base: 'Silverstone, United Kingdom' },
-  'Alpine': { full: 'BWT Alpine F1 Team', principal: 'Oliver Oakes', base: 'Enstone, United Kingdom' },
-  'Williams': { full: 'Williams Racing', principal: 'James Vowles', base: 'Grove, United Kingdom' },
-  'RB': { full: 'Visa Cash App RB F1 Team', principal: 'Alan Permane', base: 'Faenza, Italy' },
-  'Racing Bulls': { full: 'Visa Cash App RB F1 Team', principal: 'Alan Permane', base: 'Faenza, Italy' },
-  'Kick Sauber': { full: 'Stake F1 Team Kick Sauber', principal: 'Mattia Binotto', base: 'Hinwil, Switzerland' },
-  'Haas': { full: 'MoneyGram Haas F1 Team', principal: 'Ayao Komatsu', base: 'Kannapolis, United States' },
-  'Audi': { full: 'Audi F1 Team', principal: 'Mattia Binotto', base: 'Neuburg, Germany' },
-  'Cadillac': { full: 'Cadillac F1 Team', principal: 'Graeme Lowdon', base: 'Fishers, United States' }
+  'Red Bull Racing': { full: 'Oracle Red Bull Racing', principal: 'Laurent Mekies', base: 'Milton Keynes, United Kingdom', engine: 'RBPT / Ford', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Red_Bull_GmbH_logo.svg/512px-Red_Bull_GmbH_logo.svg.png' },
+  'Ferrari': { full: 'Scuderia Ferrari', principal: 'Frédéric Vasseur', base: 'Maranello, Italy', engine: 'Ferrari', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Scuderia_Ferrari_Logo.svg/512px-Scuderia_Ferrari_Logo.svg.png' },
+  'Mercedes': { full: 'Mercedes-AMG PETRONAS F1 Team', principal: 'Toto Wolff', base: 'Brackley, United Kingdom', engine: 'Mercedes', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Mercedes-Logo.svg/512px-Mercedes-Logo.svg.png', invert: true },
+  'McLaren': { full: 'McLaren Formula 1 Team', principal: 'Andrea Stella', base: 'Woking, United Kingdom', engine: 'Mercedes', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/50/McLaren_Speedmark_logo.svg/512px-McLaren_Speedmark_logo.svg.png', invert: true },
+  'Aston Martin': { full: 'Aston Martin Aramco F1 Team', principal: 'Adrian Newey', base: 'Silverstone, United Kingdom', engine: 'Honda', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Aston_Martin_logo.svg/512px-Aston_Martin_logo.svg.png', invert: true },
+  'Alpine': { full: 'BWT Alpine F1 Team', principal: 'Oliver Oakes', base: 'Enstone, United Kingdom', engine: 'Mercedes', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Alpine_Automobiles_logo.svg/512px-Alpine_Automobiles_logo.svg.png' },
+  'Williams': { full: 'Williams Racing', principal: 'James Vowles', base: 'Grove, United Kingdom', engine: 'Mercedes', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Williams_F1_logo.svg/512px-Williams_F1_logo.svg.png', invert: true },
+  'RB': { full: 'Visa Cash App RB F1 Team', principal: 'Alan Permane', base: 'Faenza, Italy', engine: 'RBPT / Ford', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Red_Bull_GmbH_logo.svg/512px-Red_Bull_GmbH_logo.svg.png' },
+  'Racing Bulls': { full: 'Visa Cash App RB F1 Team', principal: 'Alan Permane', base: 'Faenza, Italy', engine: 'RBPT / Ford', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Red_Bull_GmbH_logo.svg/512px-Red_Bull_GmbH_logo.svg.png' },
+  'Kick Sauber': { full: 'Stake F1 Team Kick Sauber', principal: 'Mattia Binotto', base: 'Hinwil, Switzerland', engine: 'Ferrari', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Kick_logo.svg/512px-Kick_logo.svg.png' },
+  'Haas': { full: 'MoneyGram Haas F1 Team', principal: 'Ayao Komatsu', base: 'Kannapolis, United States', engine: 'Ferrari', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Haas_F1_Team_logo.svg/512px-Haas_F1_Team_logo.svg.png', invert: true },
+  'Audi': { full: 'Audi F1 Team', principal: 'Mattia Binotto', base: 'Neuburg, Germany', engine: 'Audi', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Audi-Logo_2016.svg/512px-Audi-Logo_2016.svg.png', invert: true },
+  'Cadillac': { full: 'Cadillac F1 Team', principal: 'Graeme Lowdon', base: 'Fishers, United States', engine: 'Ferrari', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Cadillac_logo_2021.svg/512px-Cadillac_logo_2021.svg.png', invert: true }
 };
 
 const CIRCUIT_FULL_NAMES = {
@@ -2818,6 +2833,7 @@ async function openTeamProfile(teamName) {
   document.body.style.overflow = '';
   
   showView('view-team-profile');
+  switchTeamSubTab('results'); // Reset to Results tab on load
   const list = document.getElementById('profile-team-results-list');
   const statsBar = document.getElementById('profile-team-stats-bar');
   const driversContainer = document.getElementById('profile-team-drivers');
@@ -2835,8 +2851,22 @@ async function openTeamProfile(teamName) {
   }
   if (!tInfo) tInfo = { full: teamName, principal: 'N/A', base: 'N/A' };
 
-  document.getElementById('profile-team-title').textContent = tInfo.full;
-  document.getElementById('profile-team-base').textContent = tInfo.base;
+  // Build a smart logo badge that stays visible in both Light and Dark mode
+  const teamHero = document.querySelector('#view-team-profile .session-hero');
+  const logoHtml = tInfo.logo 
+    ? `<div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:0.5rem; display:flex; align-items:center; justify-content:center; margin-right:1.5rem; width:80px; height:60px;"><img src="${tInfo.logo}" style="max-height:100%; max-width:100%; object-fit:contain;"></div>` 
+    : '';
+
+  // Inject the logo and text side-by-side
+  teamHero.innerHTML = `
+    <div style="display:flex; align-items:center;">
+      ${logoHtml}
+      <div>
+        <div class="session-hero-name" id="profile-team-title">${tInfo.full}</div>
+        <div class="session-hero-sub" id="profile-team-base">${tInfo.base}</div>
+      </div>
+    </div>
+  `;
 
   try {
     const pastMeetings = allMeetings.filter(m => new Date(m.date_end) < NOW);
@@ -2998,6 +3028,7 @@ async function openTeamProfile(teamName) {
 
     statsBar.innerHTML = `
       <div class="stat"><div class="stat-label">Team Principal</div><div class="stat-value" style="color:var(--text);">${tInfo.principal}</div></div>
+      <div class="stat"><div class="stat-label">Power Unit</div><div class="stat-value" style="color:var(--text);">${tInfo.engine || 'Unknown'}</div></div>
       <div class="stat"><div class="stat-label">Total Points</div><div class="stat-value">${totalTeamPoints}</div></div>
       <div class="stat"><div class="stat-label">Wins</div><div class="stat-value">${raceWins}</div></div>
       <div class="stat"><div class="stat-label">Podiums</div><div class="stat-value">${podiums}</div></div>
@@ -3018,6 +3049,16 @@ function switchProfileSubTab(tabId) {
   
   document.querySelectorAll('#profile-subtabs-wrapper .subtab-content').forEach(content => content.classList.remove('active'));
   const activeContent = document.getElementById(`profile-subtab-content-${tabId}`);
+  if (activeContent) activeContent.classList.add('active');
+}
+
+function switchTeamSubTab(tabId) {
+  document.querySelectorAll('#team-subtabs-container .subtab-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`team-subtab-btn-${tabId}`);
+  if (activeBtn) activeBtn.classList.add('active');
+  
+  document.querySelectorAll('#team-subtabs-wrapper .subtab-content').forEach(content => content.classList.remove('active'));
+  const activeContent = document.getElementById(`team-subtab-content-${tabId}`);
   if (activeContent) activeContent.classList.add('active');
 }
 
