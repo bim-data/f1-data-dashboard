@@ -2325,13 +2325,11 @@ async function openDriverProfile(driverNumber) {
       const roundText = meeting ? (meeting.is_testing ? 'TEST' : `RW${meeting.race_week}`) : '';
       const dateString = meeting ? `${fmtDate(meeting.date_start)} - ${fmtDate(meeting.date_end)}` : '';
       
-      // Give Sprint sessions a distinct orange color so they stand out
-      let badgeHtml = '';
+      // Safely initialize to an empty string so "undefined" never prints!
+      let badgeHtml = ''; 
       if (n.includes('sprint')) {
-        // Orange badge for Sprints
         badgeHtml = `<span style="background:#E87D2B; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">${s.session_name}</span>`;
       } else if (isPrac) {
-        // Muted grey badge for Practice sessions (FP1, FP2, etc.)
         badgeHtml = `<span style="background:var(--text-muted); color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">${s.session_name}</span>`;
       }
 
