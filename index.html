@@ -1480,8 +1480,9 @@ function renderSeason() {
     // --- NEW: Use accurate Race Week labels ---
     const roundLabel = m.is_testing ? 'Pre-Season Testing' : `Race Week ${m.race_week}`;
     
-    // Grab the full sponsored name! Fall back to the short name just in case.
-    const officialName = m.meeting_official_name || m.meeting_name;
+    // Grab the full sponsored name and strip out "Formula 1" to save space
+    let officialName = m.meeting_official_name || m.meeting_name;
+    officialName = officialName.replace(/FORMULA 1/i, '').trim();
 
     // Build the Flag for the left side
     const flagCode = getCountryCode(m.country_name);
