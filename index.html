@@ -2248,6 +2248,14 @@ async function openDriverProfile(driverNumber) {
     const qualiHtmls = [];
     const pracHtmls = [];
 
+    // Helper to determine sector color
+    const getSectorClass = (val, sessionBest, personalBest) => {
+      if (!val || val <= 0) return 's-none';
+      if (val === sessionBest) return 's-purple';
+      if (val === personalBest) return 's-green';
+      return 's-yellow';
+    };
+
     for (const s of allPastSessions) {
       const n = (s.session_name || '').toLowerCase();
       
@@ -2258,11 +2266,12 @@ async function openDriverProfile(driverNumber) {
 
       if (!isRace && !isQuali && !isPrac) continue;
 
-      // Only fetch laps for races to save network bandwidth and avoid breaking the tiles
-      const [resultData, allChampDrivers, myLaps] = await Promise.all([
+      // THE FIX: Also fetch all session laps for Practice and Qualifying to calculate Purples!
+      const [resultData, allChampDrivers, myRaceLaps, allSessionLaps] = await Promise.all([
         fetchJSON(`${BASE}/session_result?session_key=${s.session_key}`).catch(() => []),
         isRace ? fetchJSON(`${BASE}/championship_drivers?session_key=${s.session_key}`).catch(() => []) : Promise.resolve([]),
-        isRace ? fetchJSON(`${BASE}/laps?session_key=${s.session_key}&driver_number=${driverNumber}`).catch(() => []) : Promise.resolve([])
+        isRace ? fetchJSON(`${BASE}/laps?session_key=${s.session_key}&driver_number=${driverNumber}`).catch(() => []) : Promise.resolve([]),
+        (isQuali || isPrac) ? fetchJSON(`${BASE}/laps?session_key=${s.session_key}`).catch(() => []) : Promise.resolve([])
       ]);
 
       const meeting = allMeetings.find(m => m.meeting_key === s.meeting_key);
@@ -2274,9 +2283,10 @@ async function openDriverProfile(driverNumber) {
 
       let myPos = 'DNF';
       let ptsGained = 0;
+      let timingHtml = ''; // Initialize the new timing block
 
       if (isRace) {
-        const validLaps = myLaps.filter(l => l.lap_duration && l.lap_duration > 0);
+        const validLaps = myRaceLaps.filter(l => l.lap_duration && l.lap_duration > 0);
         if (validLaps.length === 0) myPos = 'DNS';
         else {
           const dResult = resultData.find(r => r.driver_number === driverNumber);
@@ -2302,6 +2312,43 @@ async function openDriverProfile(driverNumber) {
         const dResult = resultData.find(r => r.driver_number === driverNumber);
         if (dResult && dResult.position) myPos = dResult.position;
         else myPos = '-';
+        
+        // THE FIX: Calculate the fastest laps and sector splits for the UI
+        const myLapsQP = allSessionLaps.filter(l => l.driver_number === driverNumber && l.lap_duration && !l.is_pit_out_lap);
+        const myFastest = myLapsQP.sort((a,b) => a.lap_duration - b.lap_duration)[0];
+        
+        if (myFastest) {
+            // Find global session bests for Purple sectors
+            const validLaps = allSessionLaps.filter(l => l.lap_duration && !l.is_pit_out_lap);
+            const bestS1 = Math.min(...validLaps.map(l => l.duration_sector_1).filter(Boolean));
+            const bestS2 = Math.min(...validLaps.map(l => l.duration_sector_2).filter(Boolean));
+            const bestS3 = Math.min(...validLaps.map(l => l.duration_sector_3).filter(Boolean));
+            
+            // Find personal bests for Green sectors
+            const pbS1 = Math.min(...myLapsQP.map(l => l.duration_sector_1).filter(Boolean));
+            const pbS2 = Math.min(...myLapsQP.map(l => l.duration_sector_2).filter(Boolean));
+            const pbS3 = Math.min(...myLapsQP.map(l => l.duration_sector_3).filter(Boolean));
+
+            const sc1 = getSectorClass(myFastest.duration_sector_1, bestS1, pbS1);
+            const sc2 = getSectorClass(myFastest.duration_sector_2, bestS2, pbS2);
+            const sc3 = getSectorClass(myFastest.duration_sector_3, bestS3, pbS3);
+
+            // THE FIX: Changed this wrapper to align side-by-side using flexbox defaults
+            timingHtml = `
+            <div style="display:flex; align-items:center; gap: 1rem; margin-right: 1.5rem; justify-content: flex-end;">
+              <div class="lap-time" style="font-size: 1.25rem;">${fmtLapTime(myFastest.lap_duration)}</div>
+              <div class="sectors">
+                <div class="sector ${sc1}"><span class="sector-label">S1</span>${fmtSectorTime(myFastest.duration_sector_1) || '—'}</div>
+                <div class="sector ${sc2}"><span class="sector-label">S2</span>${fmtSectorTime(myFastest.duration_sector_2) || '—'}</div>
+                <div class="sector ${sc3}"><span class="sector-label">S3</span>${fmtSectorTime(myFastest.duration_sector_3) || '—'}</div>
+              </div>
+            </div>`;
+        } else {
+            timingHtml = `
+            <div style="display:flex; align-items:center; margin-right: 1.5rem; justify-content: flex-end;">
+                <div class="lap-time no-time">NO TIME</div>
+            </div>`;
+        }
       }
 
       let formattedPos = myPos;
@@ -2330,6 +2377,9 @@ async function openDriverProfile(driverNumber) {
           </div>
 
           <div style="display:flex; align-items:center; gap: 2.5rem; text-align:right;">
+            
+            ${timingHtml}
+
             <div style="display:flex; flex-direction:column; align-items:center;">
               <span style="font-size:0.55rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px; font-family:'Barlow Condensed', sans-serif;">Finish</span>
               <div class="driver-pos ${posClass}" style="font-size: 1.25rem; line-height: 1;">${formattedPos}</div>
