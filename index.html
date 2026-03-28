@@ -2344,7 +2344,10 @@ async function openDriverProfile(driverNumber) {
     const tc = teamColor(driverObj.team_name);
     
     updateDriverHeader('profile-driver-title', driverObj);
-    document.getElementById('profile-driver-team').textContent = driverObj.team_name;
+    
+    // Inject the team logo next to the team name
+    const teamLogoHtml = getTeamLogoHtml(driverObj.team_name, '14px');
+    document.getElementById('profile-driver-team').innerHTML = `<div style="display:flex; align-items:center; gap:6px;">${teamLogoHtml} ${driverObj.team_name}</div>`;
 
     // 4. Fetch Points
     let totalPoints = 0;
