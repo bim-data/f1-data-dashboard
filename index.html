@@ -1480,9 +1480,13 @@ function renderSeason() {
     // --- NEW: Use accurate Race Week labels ---
     const roundLabel = m.is_testing ? 'Pre-Season Testing' : `Race Week ${m.race_week}`;
     
-    // Grab the full sponsored name and strip out "Formula 1" to save space
+    // Grab the full sponsored name, strip "Formula 1", and strip the year from the end
     let officialName = m.meeting_official_name || m.meeting_name;
-    officialName = officialName.replace(/FORMULA 1/i, '').trim();
+    officialName = officialName
+      .replace(/FORMULA 1/i, '')     // Removes "Formula 1" from the beginning
+      .trim()                        // Cleans up the leading space
+      .replace(/\s*\d{4}$/, '')      // Removes the 4-digit year from the very end
+      .trim();                       // Cleans up any trailing spaces left behind
 
     // Build the Flag for the left side
     const flagCode = getCountryCode(m.country_name);
