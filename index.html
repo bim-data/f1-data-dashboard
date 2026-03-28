@@ -1576,11 +1576,20 @@ async function selectMeeting(key) {
   const flagHtml = currentMeeting.country_flag
     ? `<img src="${currentMeeting.country_flag}" alt="${currentMeeting.country_name}" style="height:40px; width:60px; object-fit:cover; border-radius:2px; border:1px solid var(--border); margin-right: 1.5rem;">`
     : '';
+
+  // NEW: Grab the full sponsored name, strip "Formula 1", and strip the year from the end
+  let cleanMeetingName = currentMeeting.meeting_official_name || currentMeeting.meeting_name;
+  cleanMeetingName = cleanMeetingName
+    .replace(/FORMULA 1/i, '')
+    .trim()
+    .replace(/\s*\d{4}$/, '')
+    .trim();
+
   hero.innerHTML = `
     <div style="display:flex; align-items:center;">
       ${flagHtml}
       <div>
-        <div class="session-hero-name">${currentMeeting.meeting_name}</div>
+        <div class="session-hero-name">${cleanMeetingName}</div>
         <div class="session-hero-sub">${currentMeeting.location} · ${fmtDate(currentMeeting.date_start)} – ${fmtDate(currentMeeting.date_end)}</div>
       </div>
     </div>
