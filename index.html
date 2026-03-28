@@ -1480,15 +1480,26 @@ function renderSeason() {
     // --- NEW: Use accurate Race Week labels ---
     const roundLabel = m.is_testing ? 'Pre-Season Testing' : `Race Week ${m.race_week}`;
     
+    // Grab the full sponsored name! Fall back to the short name just in case.
+    const officialName = m.meeting_official_name || m.meeting_name;
+
+    // Build the Flag for the left side
+    const flagCode = getCountryCode(m.country_name);
+    const flagHtml = m.country_name ? `<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${flagCode}.svg" style="width: 28px; height: auto; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); flex-shrink: 0; margin-top: 4px;">` : '';
+    
     return `
       <div class="race-card ${cls}" ${onclick}>
         ${isNext ? '<div class="next-badge">Next</div>' : ''}
         <div class="card-accent-bar"></div>
         <div class="card-img">${imgHtml}</div>
-        <div class="card-body">
-          <div class="card-round">${roundLabel}</div>
-          <div class="card-name">${m.meeting_name.replace(' Grand Prix', '').replace('Grand Prix', '')}<br><span style="font-weight:300">${m.is_testing ? '' : 'Grand Prix'}</span></div>
-          <div class="card-date">${fmtDate(m.date_start)}</div>
+        
+        <div class="card-body" style="display: flex; gap: 0.75rem; align-items: flex-start;">
+          ${flagHtml}
+          <div style="display: flex; flex-direction: column;">
+            <div class="card-round">${roundLabel}</div>
+            <div class="card-name" style="font-size: 1rem; line-height: 1.15; margin-bottom: 4px;">${officialName}</div>
+            <div class="card-date">${fmtDate(m.date_start)}</div>
+          </div>
         </div>
       </div>`;
   }).join('');
