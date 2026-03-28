@@ -2325,7 +2325,16 @@ async function openDriverProfile(driverNumber) {
       const roundText = meeting ? (meeting.is_testing ? 'TEST' : `RW${meeting.race_week}`) : '';
       const dateString = meeting ? `${fmtDate(meeting.date_start)} - ${fmtDate(meeting.date_end)}` : '';
       
-      let badgeColor = isRace ? 'var(--accent)' : isQuali ? '#3671C6' : 'var(--text-muted)';
+      // Give Sprint sessions a distinct orange color so they stand out
+          let badgeColor = 'var(--text-muted)'; 
+          if (n.includes('sprint')) {
+            badgeColor = '#E87D2B'; 
+          } else if (isRace) {
+            badgeColor = 'var(--accent)'; 
+          } else if (isQuali) {
+            badgeColor = '#3671C6'; 
+          }
+          
       const badgeHtml = `<span style="background:${badgeColor}; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">${s.session_name}</span>`;
 
       let myPos = 'DNF';
@@ -2911,7 +2920,7 @@ async function openTeamProfile(teamName) {
       const meeting = allMeetings.find(m => m.meeting_key === s.meeting_key);
       const roundText = meeting ? (meeting.is_testing ? 'TEST' : `RW${meeting.race_week}`) : '';
       const dateString = meeting ? `${fmtDate(meeting.date_start)} - ${fmtDate(meeting.date_end)}` : '';
-      const badgeHtml = isSprint ? `<span style="background:var(--accent); color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle;">SPRINT</span>` : '';
+      const badgeHtml = isSprint ? `<span style="background:#E87D2B; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle;">SPRINT</span>` : '';
 
       rowHtmls.push(`
         <div class="driver-row" style="grid-template-columns: 2.5rem 1fr auto;" onclick="selectMeeting(${meeting.meeting_key})">
