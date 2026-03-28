@@ -194,6 +194,30 @@
   .pts-label { font-size: 0.6rem; color: var(--text-dim); font-weight: 400; margin-left: 1px; }
   .driver-pts-gained { font-family: 'Barlow Condensed', sans-serif; font-size: 0.75rem; font-weight: 700; color: #4ddc80; background: rgba(0, 200, 80, 0.12); padding: 1px 5px; border-radius: 2px; white-space: nowrap; }
   .driver-pts-gained.zero { color: var(--text-dim); background: none; }
+/* Mobile Standings Modal Classes */
+  .desktop-controls { display: block; }
+  .mobile-controls { display: none; }
+  .mobile-close-btn { display: none; background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 0.2rem 0.6rem; border-radius: 3px; font-family: 'Barlow', sans-serif; cursor: pointer; transition: 0.2s; font-size: 1rem; }
+  .mobile-close-btn:hover { color: var(--text); background: var(--surface2); }
+
+  @media (max-width: 900px) {
+    .desktop-controls { display: none !important; }
+    .mobile-controls { display: flex; gap: 0.5rem; }
+    .mobile-close-btn { display: block; }
+    
+    /* When active on mobile, panels become full-screen overlays! */
+    .standings-panel.mobile-modal-active {
+      display: flex !important;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: 9999;
+      background: var(--bg);
+      border: none; border-radius: 0;
+      overflow-y: auto;
+    }
+  }
 
   @media (max-width: 1100px) { .main-layout { grid-template-columns: 180px 1fr 180px; } }
   @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } .standings-panel { display: none !important; } }
@@ -242,7 +266,13 @@
       <option value="2023">2023</option>
     </select>
 
-    <button class="theme-toggle" id="standings-toggle" onclick="toggleStandings()">Hide Standings</button>
+    <button class="theme-toggle desktop-controls" id="standings-toggle" onclick="toggleStandings()">Hide Standings</button>
+
+    <div class="mobile-controls">
+      <button class="theme-toggle" onclick="toggleMobileStandings('standings-drivers')">Drivers</button>
+      <button class="theme-toggle" onclick="toggleMobileStandings('standings-constructors')">Teams</button>
+    </div>
+
     <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()">☾ Dark</button>
   </div>
 </header>
@@ -1365,8 +1395,11 @@ async function loadStandings() {
     const dPanel = document.getElementById('standings-drivers');
     dPanel.innerHTML = `
       <div class="standings-header">
-        <span class="standings-title">Drivers</span>
-        <span style="font-size:0.65rem;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.06em;text-transform:uppercase">After ${lastMeeting.is_testing ? 'Testing' : 'RW' + lastMeeting.race_week}</span>
+        <div>
+          <span class="standings-title">Drivers</span>
+          <span style="font-size:0.65rem;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.06em;text-transform:uppercase; display:block;">After ${lastMeeting.is_testing ? 'Testing' : 'RW' + lastMeeting.race_week}</span>
+        </div>
+        <button class="mobile-close-btn" onclick="toggleMobileStandings('standings-drivers')">✕</button>
       </div>
       ${sortedDrivers.map((d, i) => {
         const info = driverInfoMap[d.driver_number] || {};
@@ -1384,8 +1417,11 @@ async function loadStandings() {
     const tPanel = document.getElementById('standings-constructors');
     tPanel.innerHTML = `
       <div class="standings-header">
-        <span class="standings-title">Constructors</span>
-        <span style="font-size:0.65rem;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.06em;text-transform:uppercase">After ${lastMeeting.is_testing ? 'Testing' : 'RW' + lastMeeting.race_week}</span>
+        <div>
+          <span class="standings-title">Constructors</span>
+          <span style="font-size:0.65rem;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.06em;text-transform:uppercase; display:block;">After ${lastMeeting.is_testing ? 'Testing' : 'RW' + lastMeeting.race_week}</span>
+        </div>
+        <button class="mobile-close-btn" onclick="toggleMobileStandings('standings-constructors')">✕</button>
       </div>
       ${sortedTeams.map((t, i) => {
         const tc = teamColor(t.team_name);
@@ -2156,6 +2192,11 @@ async function viewDriverDetails(driverNumber) {
 
 
 async function openDriverProfile(driverNumber) {
+
+  // Close any open mobile standings modals automatically
+  document.querySelectorAll('.standings-panel').forEach(p => p.classList.remove('mobile-modal-active'));
+  document.body.style.overflow = '';
+
   // 1. Determine where we came from before changing the view
   const activeView = document.querySelector('.view.active');
   const originId = activeView ? activeView.id : 'view-season';
@@ -2714,6 +2755,10 @@ async function renderRacePositionChart(containerId, driverNumber) {
 }
 
 async function openTeamProfile(teamName) {
+// Close any open mobile standings modals automatically
+  document.querySelectorAll('.standings-panel').forEach(p => p.classList.remove('mobile-modal-active'));
+  document.body.style.overflow = '';
+  
   showView('view-team-profile');
   const list = document.getElementById('profile-team-results-list');
   const statsBar = document.getElementById('profile-team-stats-bar');
@@ -3233,6 +3278,19 @@ async function renderTrackDominance() {
 
   } catch (e) {
     document.getElementById('dom-loading').innerHTML = `<div class="error-msg">Telemetry analysis failed: ${e.message}</div>`;
+  }
+}
+
+function toggleMobileStandings(panelId) {
+  const panel = document.getElementById(panelId);
+  if (panel.classList.contains('mobile-modal-active')) {
+    panel.classList.remove('mobile-modal-active');
+    document.body.style.overflow = ''; // Restore background scrolling
+  } else {
+    // Close other panels first
+    document.querySelectorAll('.standings-panel').forEach(p => p.classList.remove('mobile-modal-active'));
+    panel.classList.add('mobile-modal-active');
+    document.body.style.overflow = 'hidden'; // Lock background scrolling
   }
 }
 
