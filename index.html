@@ -2326,8 +2326,14 @@ async function openDriverProfile(driverNumber) {
       const dateString = meeting ? `${fmtDate(meeting.date_start)} - ${fmtDate(meeting.date_end)}` : '';
       
       // Give Sprint sessions a distinct orange color so they stand out
-      const isSprint = n.includes('sprint');
-      const badgeHtml = isSprint ? `<span style="background:#E87D2B; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">${s.session_name}</span>` : '';
+      let badgeHtml = '';
+      if (n.includes('sprint')) {
+        // Orange badge for Sprints
+        badgeHtml = `<span style="background:#E87D2B; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">${s.session_name}</span>`;
+      } else if (isPrac) {
+        // Muted grey badge for Practice sessions (FP1, FP2, etc.)
+        badgeHtml = `<span style="background:var(--text-muted); color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">${s.session_name}</span>`;
+      }
 
       let myPos = 'DNF';
       let ptsGained = 0;
