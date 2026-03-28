@@ -243,7 +243,13 @@
   .stat { display: flex; flex-direction: column; gap: 0.2rem; }
   .stat-label { font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; font-family: 'Barlow Condensed', sans-serif; }
   .stat-value { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 1.1rem; }
-  @media (max-width: 600px) { main { padding: 1rem; } header { padding: 1rem; } .season-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; } .stats-bar { flex-wrap: wrap; gap: 1rem; } }
+  @media (max-width: 650px) { 
+    main { padding: 1rem; } 
+    header { padding: 1rem; flex-wrap: wrap; justify-content: center; gap: 1rem; } 
+    .header-right { flex-wrap: wrap; justify-content: center; gap: 0.5rem; width: 100%; }
+    .season-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; } 
+    .stats-bar { flex-wrap: wrap; gap: 1rem; } 
+  }
 </style>
 </head>
 <body data-theme="light">
