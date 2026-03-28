@@ -539,19 +539,22 @@ const TEAM_COLORS = {
 };
 
 const TEAM_INFO = {
-  'Red Bull Racing': { full: 'Oracle Red Bull Racing', principal: 'Laurent Mekies', base: 'Milton Keynes, United Kingdom', engine: 'RBPT / Ford', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Red_Bull_GmbH_logo.svg/512px-Red_Bull_GmbH_logo.svg.png' },
-  'Ferrari': { full: 'Scuderia Ferrari', principal: 'Frédéric Vasseur', base: 'Maranello, Italy', engine: 'Ferrari', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Scuderia_Ferrari_Logo.svg/512px-Scuderia_Ferrari_Logo.svg.png' },
-  'Mercedes': { full: 'Mercedes-AMG PETRONAS F1 Team', principal: 'Toto Wolff', base: 'Brackley, United Kingdom', engine: 'Mercedes', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Mercedes-Logo.svg/512px-Mercedes-Logo.svg.png', invert: true },
-  'McLaren': { full: 'McLaren Formula 1 Team', principal: 'Andrea Stella', base: 'Woking, United Kingdom', engine: 'Mercedes', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/50/McLaren_Speedmark_logo.svg/512px-McLaren_Speedmark_logo.svg.png', invert: true },
-  'Aston Martin': { full: 'Aston Martin Aramco F1 Team', principal: 'Adrian Newey', base: 'Silverstone, United Kingdom', engine: 'Honda', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Aston_Martin_logo.svg/512px-Aston_Martin_logo.svg.png', invert: true },
-  'Alpine': { full: 'BWT Alpine F1 Team', principal: 'Oliver Oakes', base: 'Enstone, United Kingdom', engine: 'Mercedes', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Alpine_Automobiles_logo.svg/512px-Alpine_Automobiles_logo.svg.png' },
-  'Williams': { full: 'Williams Racing', principal: 'James Vowles', base: 'Grove, United Kingdom', engine: 'Mercedes', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Williams_F1_logo.svg/512px-Williams_F1_logo.svg.png', invert: true },
-  'RB': { full: 'Visa Cash App RB F1 Team', principal: 'Alan Permane', base: 'Faenza, Italy', engine: 'RBPT / Ford', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Red_Bull_GmbH_logo.svg/512px-Red_Bull_GmbH_logo.svg.png' },
-  'Racing Bulls': { full: 'Visa Cash App RB F1 Team', principal: 'Alan Permane', base: 'Faenza, Italy', engine: 'RBPT / Ford', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Red_Bull_GmbH_logo.svg/512px-Red_Bull_GmbH_logo.svg.png' },
-  'Kick Sauber': { full: 'Stake F1 Team Kick Sauber', principal: 'Mattia Binotto', base: 'Hinwil, Switzerland', engine: 'Ferrari', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Kick_logo.svg/512px-Kick_logo.svg.png' },
-  'Haas': { full: 'MoneyGram Haas F1 Team', principal: 'Ayao Komatsu', base: 'Kannapolis, United States', engine: 'Ferrari', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Haas_F1_Team_logo.svg/512px-Haas_F1_Team_logo.svg.png', invert: true },
-  'Audi': { full: 'Audi F1 Team', principal: 'Mattia Binotto', base: 'Neuburg, Germany', engine: 'Audi', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Audi-Logo_2016.svg/512px-Audi-Logo_2016.svg.png', invert: true },
-  'Cadillac': { full: 'Cadillac F1 Team', principal: 'Graeme Lowdon', base: 'Fishers, United States', engine: 'Ferrari', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Cadillac_logo_2021.svg/512px-Cadillac_logo_2021.svg.png', invert: true }
+  'Red Bull Racing': { full: 'Oracle Red Bull Racing', principal: 'Laurent Mekies', base: 'Milton Keynes, United Kingdom', engine: 'RBPT / Ford', logo: './assets/logos/red-bull-racing.png' },
+  'Ferrari': { full: 'Scuderia Ferrari', principal: 'Frédéric Vasseur', base: 'Maranello, Italy', engine: 'Ferrari', logo: './assets/logos/Ferrari-Scuderia-Logo.png' },
+  'Mercedes': { full: 'Mercedes-AMG PETRONAS F1 Team', principal: 'Toto Wolff', base: 'Brackley, United Kingdom', engine: 'Mercedes', logo: './assets/logos/Mercedes.svg', invert: true },
+  'McLaren': { full: 'McLaren Formula 1 Team', principal: 'Andrea Stella', base: 'Woking, United Kingdom', engine: 'Mercedes', logo: './assets/logos/mclaren.png', invert: true },
+  'Aston Martin': { full: 'Aston Martin Aramco F1 Team', principal: 'Adrian Newey', base: 'Silverstone, United Kingdom', engine: 'Honda', logo: './assets/logos/aston-martin.png', invert: true },
+  'Alpine': { full: 'BWT Alpine F1 Team', principal: 'Oliver Oakes', base: 'Enstone, United Kingdom', engine: 'Mercedes', logo: './assets/logos/apline.png' },
+  'Williams': { full: 'Williams Racing', principal: 'James Vowles', base: 'Grove, United Kingdom', engine: 'Mercedes', logo: './assets/logos/williams.png', invert: true },
+  
+  // BOTH aliases now point to your new VCARB logo!
+  'RB': { full: 'Visa Cash App RB F1 Team', principal: 'Alan Permane', base: 'Faenza, Italy', engine: 'RBPT / Ford', logo: './assets/logos/Visa-Cash-App-RB-logo.png' },
+  'Racing Bulls': { full: 'Visa Cash App RB F1 Team', principal: 'Alan Permane', base: 'Faenza, Italy', engine: 'RBPT / Ford', logo: './assets/logos/Visa-Cash-App-RB-logo.png' },
+  
+  'Kick Sauber': { full: 'Stake F1 Team Kick Sauber', principal: 'Mattia Binotto', base: 'Hinwil, Switzerland', engine: 'Ferrari', logo: './assets/logos/kick.png' },
+  'Haas': { full: 'MoneyGram Haas F1 Team', principal: 'Ayao Komatsu', base: 'Kannapolis, United States', engine: 'Ferrari', logo: './assets/logos/haas-f1-team.svg', invert: true },
+  'Audi': { full: 'Audi F1 Team', principal: 'Mattia Binotto', base: 'Neuburg, Germany', engine: 'Audi', logo: './assets/logos/Audi.svg', invert: true },
+  'Cadillac': { full: 'Cadillac F1 Team', principal: 'Graeme Lowdon', base: 'Fishers, United States', engine: 'Ferrari', logo: './assets/logos/Cadillac.svg', invert: true }
 };
 
 const CIRCUIT_FULL_NAMES = {
@@ -2852,12 +2855,14 @@ async function openTeamProfile(teamName) {
   if (!tInfo) tInfo = { full: teamName, principal: 'N/A', base: 'N/A' };
 
   // Build a smart logo badge that stays visible in both Light and Dark mode
+  // Build the minimalist logo mark, applying the invert class if needed, and stripping the referer!
   const teamHero = document.querySelector('#view-team-profile .session-hero');
+  const logoClass = tInfo.invert ? 'invert-dark' : '';
   const logoHtml = tInfo.logo 
-    ? `<div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:0.5rem; display:flex; align-items:center; justify-content:center; margin-right:1.5rem; width:80px; height:60px;"><img src="${tInfo.logo}" style="max-height:100%; max-width:100%; object-fit:contain;"></div>` 
+    ? `<img src="${tInfo.logo}" referrerpolicy="no-referrer" crossorigin="anonymous" class="${logoClass}" style="height:38px; width:auto; max-width: 60px; object-fit:contain; margin-right:1.25rem; display:block;">` 
     : '';
 
-  // Inject the logo and text side-by-side
+  // Inject the logo seamlessly next to the text
   teamHero.innerHTML = `
     <div style="display:flex; align-items:center;">
       ${logoHtml}
