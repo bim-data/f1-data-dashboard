@@ -567,6 +567,19 @@ const CIRCUIT_FULL_NAMES = {
   'Madrid': 'Circuito de Madrid'
 };
 
+// Global Helper for Country Flags
+function getCountryCode(countryName) {
+  if (!countryName) return 'un';
+  const countryMap = {
+    'Bahrain': 'bh', 'Saudi Arabia': 'sa', 'Australia': 'au', 'Japan': 'jp',
+    'China': 'cn', 'USA': 'us', 'United States': 'us', 'Italy': 'it', 'Monaco': 'mc',
+    'Canada': 'ca', 'Spain': 'es', 'Austria': 'at', 'Great Britain': 'gb', 'UK': 'gb',
+    'Hungary': 'hu', 'Belgium': 'be', 'Netherlands': 'nl', 'Singapore': 'sg',
+    'Azerbaijan': 'az', 'Mexico': 'mx', 'Brazil': 'br', 'Qatar': 'qa', 'UAE': 'ae', 'Abu Dhabi': 'ae'
+  };
+  return countryMap[countryName] || 'un';
+}
+
 function teamColor(team) {
   for (const [k, v] of Object.entries(TEAM_COLORS)) {
     if (team && team.includes(k)) return v;
