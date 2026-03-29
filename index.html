@@ -1736,7 +1736,8 @@ async function renderChampionshipBattle(allYearSessions, sortedDrivers, sortedTe
                 _driverNum: d.driver_number,
                 _origColor: tc.bg,
                 _origWidth: isLeader ? 4 : 2,
-                _origOrder: isLeader ? 0 : 1
+                _origOrder: isLeader ? 0 : 1,
+                _origDash: isSecondDriver ? [5, 5] : []
             };
         });
 
