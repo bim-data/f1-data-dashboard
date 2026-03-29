@@ -1806,16 +1806,25 @@ async function renderChampionshipBattle(allYearSessions, sortedDrivers, sortedTe
         };
 
         window.resetChampLines = (type) => {
-            const chart = type === 'driver' ? window.champDriverChartInst : window.champTeamChartInst;
-            if (!chart) return;
-            
-            chart.data.datasets.forEach(ds => {
-                ds.borderColor = ds._origColor;
-                ds.borderWidth = ds._origWidth;
-                ds.order = ds._origOrder;
-            });
-            chart.update('none');
-        };
+    const chart = type === 'driver' ? window.champDriverChartInst : window.champTeamChartInst;
+    if (!chart) return;
+    
+    chart.data.datasets.forEach(ds => {
+        ds.borderColor = ds._origColor;
+        ds.borderWidth = ds._origWidth;
+        ds.order = ds._origOrder;
+        ds.borderDash = ds._origDash || [];
+    });
+    chart.update('none');
+};
+
+// Attach guaranteed mouseleave listeners directly to canvas elements
+setTimeout(() => {
+    const dCanvas = document.getElementById('champ-driver-chart');
+    const tCanvas = document.getElementById('champ-team-chart');
+    if (dCanvas) dCanvas.onmouseleave = () => resetChampLines('driver');
+    if (tCanvas) tCanvas.onmouseleave = () => resetChampLines('team');
+}, 100);
 
         // --- NEW: Inject Chart.js Native Hover Support ---
         const driverChartOptions = {
@@ -1823,8 +1832,6 @@ async function renderChampionshipBattle(allYearSessions, sortedDrivers, sortedTe
             onHover: (e, elements, chart) => {
                 if (elements && elements.length) {
                     highlightChampLine('driver', chart.data.datasets[elements[0].datasetIndex]._driverNum);
-                } else {
-                    resetChampLines('driver');
                 }
             }
         };
@@ -1834,8 +1841,6 @@ async function renderChampionshipBattle(allYearSessions, sortedDrivers, sortedTe
             onHover: (e, elements, chart) => {
                 if (elements && elements.length) {
                     highlightChampLine('team', chart.data.datasets[elements[0].datasetIndex]._teamName);
-                } else {
-                    resetChampLines('team');
                 }
             }
         };
