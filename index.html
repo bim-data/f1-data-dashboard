@@ -258,7 +258,7 @@
 <header>
   <div class="logo">
     <div class="logo-mark"></div>
-    <div class="logo-text">Pitwall <span class="logo-year">2026</span></div>
+    <div class="logo-text">Bim F1 Data Dashboard <span class="logo-year">2026</span></div>
   </div>
   
   <div class="header-right">
@@ -545,6 +545,7 @@ const TEAM_COLORS = {
   'Alpine': { bg: '#0093CC', text: '#fff' },
   'Williams': { bg: '#64C4FF', text: '#000' },
   'RB': { bg: '#6692FF', text: '#fff' },
+  'Racing Bulls': { bg: '#6692FF', text: '#fff' }, // Added alias so they get their blue background!
   'Kick Sauber': { bg: '#52E252', text: '#000' },
   'Haas': { bg: '#B6BABD', text: '#000' },
 };
@@ -565,7 +566,7 @@ const TEAM_INFO = {
   'Kick Sauber': { full: 'Stake F1 Team Kick Sauber', principal: 'Mattia Binotto', base: 'Hinwil, Switzerland', engine: 'Ferrari', logo: './assets/logos/kick.png' },
   'Haas': { full: 'MoneyGram Haas F1 Team', principal: 'Ayao Komatsu', base: 'Kannapolis, United States', engine: 'Ferrari', logo: './assets/logos/haas-f1-team.svg' },
   'Audi': { full: 'Audi F1 Team', principal: 'Mattia Binotto', base: 'Neuburg, Germany', engine: 'Audi', logo: './assets/logos/Audi.svg', invert: true },
-  'Cadillac': { full: 'Cadillac F1 Team', principal: 'Graeme Lowdon', base: 'Fishers, United States', engine: 'Ferrari', logo: './assets/logos/Cadillac.svg', invert: true }
+  'Cadillac': { full: 'Cadillac F1 Team', principal: 'Graeme Lowdon', base: 'Fishers, United States', engine: 'Ferrari', logo: './assets/logos/Cadillac-Logo.png', invert: true }
 };
 
 // Global Helper to easily grab a Team Logo HTML tag anywhere in the app
@@ -583,7 +584,8 @@ function getTeamLogoHtml(teamName, height = '14px', badgeTextColor = null) {
   let logoClass = '';
   
   // Identify teams that should NEVER be forced to white/black inside colored badges
-  const keepOriginalColor = teamName === 'Ferrari' || teamName === 'Red Bull Racing' || teamName === 'RB' || teamName === 'Racing Bulls';
+  // Identify teams that should NEVER be forced to white/black inside colored badges
+  const keepOriginalColor = teamName === 'Ferrari' || teamName === 'Red Bull Racing';
   
   // If placed inside a colored badge, force contrast based on text color (unless exempt)
   if (badgeTextColor && !keepOriginalColor) {
@@ -1296,8 +1298,8 @@ async function renderBoxWhisker(containerId, driverNumber) {
             const logoH = 12;
             const logoXPos = badgeX + 6;
             
-            // Force high-contrast based on badge text color (exempting Ferrari and Red Bull)
-            const keepOriginalColor = driver.team_name === 'Ferrari' || driver.team_name === 'Red Bull Racing' || driver.team_name === 'RB' || driver.team_name === 'Racing Bulls';
+            // Force high-contrast based on badge text color (exempting Ferrari and Red Bull Racing)
+            const keepOriginalColor = driver.team_name === 'Ferrari' || driver.team_name === 'Red Bull Racing';
             let filterCss = '';
             if (!keepOriginalColor) {
                 filterCss = tc.text === '#fff' ? 'filter: invert(1) brightness(2);' : 'filter: brightness(0);';
@@ -1532,7 +1534,10 @@ async function loadStandings() {
         return `
           <div class="standings-row" style="cursor: pointer;" onclick="openDriverProfile(${d.driver_number})">
             <div class="s-pos ${posClass}">${d.position_current}</div>
-            <div class="s-name" style="display:flex; align-items:center; gap:6px;">${getTeamLogoHtml(info.team_name, '12px')} ${name}</div>
+            <div class="s-name" style="display:flex; align-items:center; gap:8px;">
+              <div style="width: 24px; display: flex; justify-content: center;">${getTeamLogoHtml(info.team_name, '12px')}</div>
+              <span>${name}</span>
+            </div>
             <div class="s-pts">${d.points_current}<span class="pts-label">pts</span></div>
           </div>`;
       }).join('')}`;
@@ -1553,7 +1558,10 @@ async function loadStandings() {
         return `
           <div class="standings-row" style="cursor: pointer;" onclick="openTeamProfile('${t.team_name}')">
             <div class="s-pos ${posClass}">${t.position_current}</div>
-            <div class="s-name" style="display:flex; align-items:center; gap:6px;">${getTeamLogoHtml(t.team_name, '12px')} ${shortName}</div>
+            <div class="s-name" style="display:flex; align-items:center; gap:8px;">
+              <div style="width: 24px; display: flex; justify-content: center;">${getTeamLogoHtml(t.team_name, '12px')}</div>
+              <span>${shortName}</span>
+            </div>
             <div class="s-pts">${t.points_current}<span class="pts-label">pts</span></div>
           </div>`;
       }).join('')}`;
@@ -2602,7 +2610,7 @@ async function openDriverProfile(driverNumber) {
           }
       }
       const flBadgeHtml = hasFL ? `<div style="font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; font-weight:800; color:#c87eff; background:rgba(150,0,230,0.15); padding:1px 5px; border-radius:2px; line-height:1.2;">FL</div>` : '';
-      
+
 
       const posClass = myPos === 1 ? 'p1' : myPos === 2 ? 'p2' : myPos === 3 ? 'p3' : '';
       const meetingKeyId = meeting ? meeting.meeting_key : null;
