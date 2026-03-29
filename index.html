@@ -310,24 +310,18 @@
           </div>
         </div>
 
-        <div id="season-tab-content-testing" class="subtab-content">
-          <div id="season-grid-testing" class="season-grid">
-            <div class="loading"><div class="spinner"></div>Fetching testing data</div>
-          </div>
-        </div>
-
-        <div id="season-tab-content-weekends" class="subtab-content active">
-          <div id="season-grid" class="season-grid">
-            <div class="loading"><div class="spinner"></div>Fetching calendar</div>
-          </div>
-        </div>
-
         <div id="season-tab-content-summary" class="subtab-content">
           <div id="season-summary-leaders" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
             <div class="loading" style="grid-column: 1 / -1; padding: 2rem;"><div class="spinner"></div>Loading championship leaders...</div>
           </div>
           <div id="season-championship-battle-area" style="color:var(--text-dim); padding:2rem 1rem; text-align:center;">
              Championship battle timeline coming soon...
+          </div>
+        </div>
+
+        <div id="season-tab-content-testing" class="subtab-content">
+          <div id="season-grid-testing" class="season-grid">
+            <div class="loading"><div class="spinner"></div>Fetching testing data</div>
           </div>
         </div>
       </div>
@@ -349,11 +343,19 @@
           <div id="subtab-content-track-dominance" class="subtab-content">
             <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1.5rem;">
               <div class="standings-title" style="margin-bottom: 0.5rem; font-size: 0.8rem;">Drivers to Compare</div>
-              <div style="display: flex; gap: 1rem; align-items: center;">
-                <select id="dom-driver-a" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="renderTrackDominance()"></select>
+              
+              <div style="display: flex; gap: 1.5rem; align-items: center;">
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                  <select id="dom-driver-a" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="renderTrackDominance()"></select>
+                  <span id="dom-time-a" style="font-family:'Barlow Condensed'; font-size:1.3rem; color:var(--text);"></span>
+                </div>
                 <span style="font-family:'Barlow Condensed'; font-size:1.2rem; font-weight:700; color:var(--text-dim);">VS</span>
-                <select id="dom-driver-b" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="renderTrackDominance()"></select>
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                  <span id="dom-time-b" style="font-family:'Barlow Condensed'; font-size:1.3rem; color:var(--text);"></span>
+                  <select id="dom-driver-b" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="renderTrackDominance()"></select>
+                </div>
               </div>
+
               <button id="dom-toggle-times-btn" class="theme-toggle" onclick="toggleMiniSectors()" style="margin-top: 1rem; padding: 0.4rem 1rem;">Show Sector Times</button>
             </div>
             
@@ -364,11 +366,10 @@
               <div id="dom-trace-container" style="width: 100%; margin-bottom: 2.5rem;">
                 <div class="standings-title" style="margin-bottom: 0.5rem; text-align: left;">Telemetry Trace</div>
                 <div id="dom-trace-body" style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1rem;">
-                  </div>
+                </div>
               </div>
 
               <div style="max-width: 600px; margin: 0 auto;">
-                
                 <div id="dom-analysis" class="stats-bar" style="margin-bottom:1.5rem; justify-content:space-around; background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1rem;"></div>
 
                 <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:1.5rem; text-align:center;">
@@ -380,10 +381,12 @@
                   <div class="standings-title" style="margin-bottom: 0.5rem; text-align: center;">Mini Sector Times (Seconds)</div>
                   <div id="dom-mini-sectors" style="background:var(--surface); border:1px solid var(--border); border-radius:4px; overflow:hidden;"></div>
                 </div>
-                
               </div>
+
             </div>
-          </div><div id="subtab-content-results" class="subtab-content active">
+          </div>
+          
+          <div id="subtab-content-results" class="subtab-content active">
             <div id="stats-bar" class="stats-bar"></div>
             <div id="drivers-list" class="drivers-list">
               <div class="loading"><div class="spinner"></div>Fetching results</div>
@@ -2207,7 +2210,7 @@ const dnfStatHtml = isRace ? `<div class="stat"><div class="stat-label">DNF / DN
                   ${d.team_name || '—'}
               </div>
             </div>
-            ${pos <= 3 ? `<div style="display:flex; align-items:center;">${getTrophyHtml(pos, '32px', false)}</div>` : ''}
+            ${(isRace && pos <= 3) ? `<div style="display:flex; align-items:center;">${getTrophyHtml(pos, '32px', false)}</div>` : ''}
           </div>
           <div class="driver-timing">
             ${timingHtml}
@@ -3392,33 +3395,80 @@ async function renderTrackDominance() {
   const container = document.getElementById('subtab-content-track-dominance');
   if (!container || !container.classList.contains('active')) return;
 
-  const selectA = document.getElementById('dom-driver-a');
-  const selectB = document.getElementById('dom-driver-b');
-  
-  // Populate dropdowns if empty
-  if (selectA.options.length === 0) {
-    const options = orderedDriversList.map(d => `<option value="${d.driver_number}">${d.name_acronym || d.last_name}</option>`).join('');
-    selectA.innerHTML = options;
-    selectB.innerHTML = options;
-    if (orderedDriversList.length > 1) selectB.selectedIndex = 1;
-  }
-
-  const dNumA = Number(selectA.value);
-  const dNumB = Number(selectB.value);
-  if (dNumA === dNumB) return;
-
   document.getElementById('dom-loading').style.display = 'flex';
-  document.getElementById('dom-results').style.display = 'none';
+  // Dim the results instead of hiding them so the page doesn't collapse and scroll up!
+  document.getElementById('dom-results').style.opacity = '0.4';
+  document.getElementById('dom-results').style.pointerEvents = 'none';
 
   try {
-    // 1. Find their fastest laps from the local database
+    const selectA = document.getElementById('dom-driver-a');
+    const selectB = document.getElementById('dom-driver-b');
+    
+    // 1. Fetch laps and find the fastest lap per driver for THIS specific session
     const allLaps = await fetchJSON(`${BASE}/laps?session_key=${currentSession.session_key}`);
-    const lapA = allLaps.filter(l => l.driver_number === dNumA && l.lap_duration).sort((a,b) => a.lap_duration - b.lap_duration)[0];
-    const lapB = allLaps.filter(l => l.driver_number === dNumB && l.lap_duration).sort((a,b) => a.lap_duration - b.lap_duration)[0];
+    
+    const driverBestLaps = {};
+    allLaps.forEach(l => {
+        if (l.lap_duration && l.lap_duration > 0 && !l.is_pit_out_lap && !l.is_pit_in_lap) {
+            if (!driverBestLaps[l.driver_number] || l.lap_duration < driverBestLaps[l.driver_number].lap_duration) {
+                driverBestLaps[l.driver_number] = l;
+            }
+        }
+    });
+
+    // 2. Rebuild dropdowns ONLY if we are loading a new session
+    if (window.lastDomSessionKey !== currentSession.session_key) {
+        window.lastDomSessionKey = currentSession.session_key;
+        
+        // Filter global drivers to only those who set a valid lap, then sort by lap time
+        const availableDrivers = orderedDriversList.filter(d => driverBestLaps[d.driver_number]);
+        availableDrivers.sort((a, b) => driverBestLaps[a.driver_number].lap_duration - driverBestLaps[b.driver_number].lap_duration);
+        
+        const options = availableDrivers.map(d => `<option value="${d.driver_number}">${d.name_acronym || d.last_name}</option>`).join('');
+        selectA.innerHTML = options;
+        selectB.innerHTML = options;
+        if (availableDrivers.length > 1) selectB.selectedIndex = 1;
+    }
+
+    const dNumA = Number(selectA.value);
+    const dNumB = Number(selectB.value);
+
+    if (dNumA === dNumB) {
+        document.getElementById('dom-loading').style.display = 'none';
+        return;
+    }
+
+    const lapA = driverBestLaps[dNumA];
+    const lapB = driverBestLaps[dNumB];
 
     if (!lapA || !lapB) throw new Error("Missing valid lap times for one or both drivers.");
 
-    // 2. Fetch live telemetry for JUST these two laps directly from OpenF1
+    // 3. Update the lap time UI next to the dropdowns
+    const timeAEl = document.getElementById('dom-time-a');
+    const timeBEl = document.getElementById('dom-time-b');
+    
+    if (timeAEl && timeBEl) {
+        const isAFaster = lapA.lap_duration <= lapB.lap_duration;
+        const gap = Math.abs(lapA.lap_duration - lapB.lap_duration).toFixed(3);
+        
+        let textA = fmtLapTime(lapA.lap_duration);
+        let textB = fmtLapTime(lapB.lap_duration);
+        const gapHtml = `<span style="font-size:0.85rem; color:var(--text-muted); font-weight:600; margin-left:6px;">(+${gap})</span>`;
+
+        if (isAFaster) {
+            timeAEl.innerHTML = textA;
+            timeAEl.style.fontWeight = '900';
+            timeBEl.innerHTML = textB + gapHtml;
+            timeBEl.style.fontWeight = '500';
+        } else {
+            timeAEl.innerHTML = textA + gapHtml;
+            timeAEl.style.fontWeight = '500';
+            timeBEl.innerHTML = textB;
+            timeBEl.style.fontWeight = '900';
+        }
+    }
+
+    // 4. Fetch live telemetry for JUST these two laps directly from OpenF1
     const getTelemetry = async (lap, dNum) => {
         const start = new Date(lap.date_start);
         const end = new Date(start.getTime() + (lap.lap_duration * 1000));
@@ -3427,7 +3477,6 @@ async function renderTrackDominance() {
         const startStr = encodeURIComponent(start.toISOString());
         const endStr = encodeURIComponent(end.toISOString());
 
-        // Use fetchJSON so it leverages our rate-limit protections and catches HTTP errors
         const loc = await fetchJSON(`${BASE}/location?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[]);
         const car = await fetchJSON(`${BASE}/car_data?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[]);
         return { loc, car, lap };
@@ -3435,13 +3484,12 @@ async function renderTrackDominance() {
 
     const [dataA, dataB] = await Promise.all([getTelemetry(lapA, dNumA), getTelemetry(lapB, dNumB)]);
     
-    // NEW: Safety check! If the API didn't have enough GPS points, stop before the math breaks
+    // Safety check! If the API didn't have enough GPS points, stop before the math breaks
     if (dataA.loc.length < 20 || dataB.loc.length < 20) {
         throw new Error("Telemetry is incomplete or unavailable from OpenF1 for these specific laps.");
     }
     
-    // 3. Mathematical Mini-Sectors
-    // Since F1 cars drive slightly different lines, we chunk the reference lap (Driver A) into 20 coordinate bins
+    // 5. Mathematical Mini-Sectors
     const NUM_SECTORS = 20;
     const refLoc = dataA.loc;
     const chunkSize = Math.floor(refLoc.length / NUM_SECTORS);
@@ -3456,7 +3504,6 @@ async function renderTrackDominance() {
         const segmentA = refLoc.slice(startIdx, endIdx);
         const timeA = (new Date(segmentA[segmentA.length-1].date) - new Date(segmentA[0].date)) / 1000;
         
-        // Find Driver B's corresponding time by matching coordinates (simplified approximation via percentage of lap)
         const startIdxB = Math.floor((startIdx / refLoc.length) * dataB.loc.length);
         const endIdxB = Math.floor((endIdx / refLoc.length) * dataB.loc.length);
         const segmentB = dataB.loc.slice(startIdxB, endIdxB);
@@ -3465,7 +3512,6 @@ async function renderTrackDominance() {
             timeB = (new Date(segmentB[segmentB.length-1].date) - new Date(segmentB[0].date)) / 1000;
         }
 
-        // Get average speed from car_data for this window
         const carA = dataA.car.slice(startIdx, endIdx);
         const avgSpeed = carA.length > 0 ? carA.reduce((sum, c) => sum + c.speed, 0) / carA.length : 150;
         const isHighSpeed = avgSpeed > 180;
@@ -3480,11 +3526,10 @@ async function renderTrackDominance() {
         });
     }
 
-    // 4. Draw the Track Map (Centered & Interactive)
+    // 6. Draw the Track Map
     const canvas = document.getElementById('trackMapCanvas');
     const ctx = canvas.getContext('2d');
     
-    // Center Math: Find bounding box and calculate offsets to perfectly center the drawing
     const xCoords = refLoc.map(p => p.x);
     const yCoords = refLoc.map(p => p.y);
     const minX = Math.min(...xCoords), maxX = Math.max(...xCoords);
@@ -3502,10 +3547,9 @@ async function renderTrackDominance() {
     
     const getCanvasPos = (x, y) => ({
         cx: offsetX + (x - minX) * scale,
-        cy: canvas.height - offsetY - (y - minY) * scale // Y is inverted in GPS vs Canvas
+        cy: canvas.height - offsetY - (y - minY) * scale
     });
 
-    // Cache canvas coordinates for the hover distance calculations
     miniSectors.forEach(sec => {
         sec.canvasPoints = sec.coords.map(p => getCanvasPos(p.x, p.y));
     });
@@ -3532,7 +3576,6 @@ async function renderTrackDominance() {
                 ctx.lineTo(sec.canvasPoints[i].cx, sec.canvasPoints[i].cy);
             }
 
-            // Hover styling logic
             const isHovered = hoveredSectorId === sec.id;
             const isFaded = hoveredSectorId !== null && !isHovered;
             
@@ -3543,23 +3586,20 @@ async function renderTrackDominance() {
             ctx.setLineDash([]);
             ctx.stroke();
 
-            // Striping for teammates
             if (isSameTeam && sec.winner === 'B') {
                 ctx.strokeStyle = '#ffffff';
                 ctx.setLineDash([8, 8]);
                 ctx.stroke();
             }
         });
-        ctx.globalAlpha = 1.0; // Reset
+        ctx.globalAlpha = 1.0;
     };
 
-    // Global exposed function for bidirectional hover
     window.highlightDomSector = (sectorId) => {
         if (hoveredSectorId === sectorId) return;
         hoveredSectorId = sectorId;
         drawMap();
         
-        // Update table row styling
         miniSectors.forEach(sec => {
             const row = document.getElementById(`dom-row-${sec.id}`);
             if (row) {
@@ -3574,7 +3614,6 @@ async function renderTrackDominance() {
         });
     };
 
-    // Canvas interactivity
     canvas.onmousemove = (e) => {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -3595,7 +3634,7 @@ async function renderTrackDominance() {
             });
         });
 
-        if (closestDist < 25) { // Hover radius threshold
+        if (closestDist < 25) { 
             canvas.style.cursor = 'pointer';
             window.highlightDomSector(closestId);
         } else {
@@ -3606,10 +3645,9 @@ async function renderTrackDominance() {
 
     canvas.onmouseleave = () => window.highlightDomSector(null);
 
-    // Initial draw
     drawMap();
 
-    // 5. Build the Data UI
+    // 7. Build the Data UI
     document.getElementById('dom-map-legend').innerHTML = `
         <div style="display:flex; align-items:center; gap:6px;">
             <div style="width:12px; height:4px; background:${colorA}; border-radius:2px;"></div> 
@@ -3630,7 +3668,6 @@ async function renderTrackDominance() {
         </div>
     `;
 
-    // Cleanly build the Mini Sector Table
     let tableHtml = `
         <div style="display:grid; grid-template-columns: 4rem 1fr 1fr; border-bottom:1px solid var(--border); padding:0.6rem 1rem; background:var(--surface2); font-family:'Barlow Condensed'; font-size:0.8rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">
             <div>Sector</div>
@@ -3658,10 +3695,7 @@ async function renderTrackDominance() {
     
     document.getElementById('dom-mini-sectors').innerHTML = tableHtml;
 
-    // ------------------------------------------------------------------
-    // NEW: BUILD TELEMETRY TRACE CHARTS (Time / Delta aligned by Distance)
-    // ------------------------------------------------------------------
-    // Mathematically integrate speed to find the actual distance traveled
+    // 8. BUILD TELEMETRY TRACE CHARTS
     function processCarData(carArr, lapStartTime) {
         if(!carArr || carArr.length === 0) return [];
         let res = [];
@@ -3683,7 +3717,6 @@ async function renderTrackDominance() {
     const processedA = processCarData(dataA.car, lapA.date_start);
     const processedB = processCarData(dataB.car, lapB.date_start);
 
-    // NEW: Bulletproof fallback if the API doesn't have the speed data
     const traceBody = document.getElementById('dom-trace-body');
     
     if (processedA.length === 0 || processedB.length === 0) {
@@ -3693,17 +3726,15 @@ async function renderTrackDominance() {
             </div>
         `;
     } else {
-        // FIX FOR THE "NULL" ERROR: Always explicitly rebuild the canvases before drawing!
         traceBody.innerHTML = `
             <div style="height: 250px; width: 100%; position: relative;"><canvas id="dom-speed-chart"></canvas></div>
             <div style="height: 150px; width: 100%; position: relative; margin-top: 0.5rem;"><canvas id="dom-delta-chart"></canvas></div>
         `;
         
         const maxDist = Math.min(processedA[processedA.length-1].dist, processedB[processedB.length-1].dist);
-        const NUM_POINTS = 300; // Granularity of the chart
+        const NUM_POINTS = 300; 
         const step = maxDist / NUM_POINTS;
 
-        // Interpolate data points precisely against physical distance
         function getAtDist(arr, targetDist) {
             let idx = arr.findIndex(item => item.dist >= targetDist);
             if(idx === 0) return arr[0];
@@ -3719,7 +3750,6 @@ async function renderTrackDominance() {
 
         const chartLabels = [], speedA = [], speedB = [], deltaA = [], deltaB = [];
         
-        // The flat reference line is always the faster overall lap
         const fasterIsA = lapA.lap_duration <= lapB.lap_duration;
 
         for(let i=0; i<=NUM_POINTS; i++) {
@@ -3731,7 +3761,6 @@ async function renderTrackDominance() {
             speedA.push(ptA.speed);
             speedB.push(ptB.speed);
 
-            // Delta Math: Positive value means that driver is SLOWER (took more time to reach that exact distance)
             if (fasterIsA) {
                 deltaA.push(0); 
                 deltaB.push(ptB.time - ptA.time);
@@ -3745,7 +3774,6 @@ async function renderTrackDominance() {
         const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
         const tickColor = isLight ? '#666' : '#aaa';
 
-        // Prepare the Datasets
         const dsSpeedA = { label: driverInfoA.name_acronym, data: speedA, borderColor: colorA, borderWidth: 2, pointRadius: 0, tension: 0.2 };
         const dsSpeedB = { label: driverInfoB.name_acronym, data: speedB, borderColor: colorB, borderWidth: 2, pointRadius: 0, tension: 0.2 };
         
@@ -3757,7 +3785,6 @@ async function renderTrackDominance() {
             dsDeltaB.borderDash = [5, 5];
         }
 
-        // Draw Speed Chart
         const ctxSpeed = document.getElementById('dom-speed-chart').getContext('2d');
         if (window.domSpeedChartInstance) window.domSpeedChartInstance.destroy();
         window.domSpeedChartInstance = new Chart(ctxSpeed, {
@@ -3771,13 +3798,12 @@ async function renderTrackDominance() {
                     tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
                 },
                 scales: {
-                    x: { display: false, grid: { color: gridColor } }, // Hide X axis to seamlessly merge with Delta chart
+                    x: { display: false, grid: { color: gridColor } },
                     y: { title: { display: true, text: 'Speed (km/h)', color: tickColor, font: { family: 'Barlow Condensed' } }, grid: { color: gridColor }, ticks: { color: tickColor } }
                 }
             }
         });
 
-        // Draw Time Delta Chart
         const ctxDelta = document.getElementById('dom-delta-chart').getContext('2d');
         if (window.domDeltaChartInstance) window.domDeltaChartInstance.destroy();
         window.domDeltaChartInstance = new Chart(ctxDelta, {
@@ -3792,7 +3818,7 @@ async function renderTrackDominance() {
                 },
                 scales: {
                     x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 15, font: { family: 'Barlow Condensed' } } },
-                    y: { title: { display: true, text: 'Gap (s)', color: tickColor, font: { family: 'Barlow Condensed' } }, grid: { color: gridColor }, ticks: { color: tickColor } }
+                    y: { reverse: true, title: { display: true, text: 'Gap (s)', color: tickColor, font: { family: 'Barlow Condensed' } }, grid: { color: gridColor }, ticks: { color: tickColor } }
                 }
             }
         });
@@ -3800,6 +3826,8 @@ async function renderTrackDominance() {
 
     document.getElementById('dom-loading').style.display = 'none';
     document.getElementById('dom-results').style.display = 'block';
+    document.getElementById('dom-results').style.opacity = '1';
+    document.getElementById('dom-results').style.pointerEvents = 'auto';
 
   } catch (e) {
     document.getElementById('dom-loading').innerHTML = `<div class="error-msg">Telemetry analysis failed: ${e.message}</div>`;
