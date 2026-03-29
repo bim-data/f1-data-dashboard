@@ -256,7 +256,7 @@
 <body data-theme="light">
 
 <header>
-  <div class="logo">
+  <div class="logo" onclick="goHome()" style="cursor: pointer;" title="Return to Season">
     <div class="logo-mark"></div>
     <div class="logo-text">Bim F1 Data Dashboard <span class="logo-year">2026</span></div>
   </div>
@@ -295,7 +295,7 @@
     <div class="content-area">
       
       <div class="view active" id="view-season">
-        <div class="view-title" id="season-title-text">2026 Season</div>
+        <div class="view-title" id="season-title-text">2026 Formula One World Championship</div>
         <div class="view-sub" id="season-sub">Loading calendar...</div>
         <div id="season-grid" class="season-grid">
           <div class="loading"><div class="spinner"></div>Fetching calendar</div>
@@ -819,7 +819,7 @@ function changeYear(year) {
   const logoYear = document.querySelector('.logo-year');
   if (logoYear) logoYear.textContent = currentYear;
   const viewTitle = document.querySelector('#view-season .view-title');
-  if (viewTitle) viewTitle.textContent = `${currentYear} Season`;
+  if (viewTitle) viewTitle.textContent = `${currentYear} Formula One World Championship`;
   goHome();
   document.getElementById('season-grid').innerHTML = `<div class="loading"><div class="spinner"></div>Fetching calendar</div>`;
   document.getElementById('standings-drivers').innerHTML = `<div class="standings-header"><span class="standings-title">Drivers</span></div><div class="loading" style="padding:2rem 1rem"><div class="spinner"></div></div>`;
@@ -1522,7 +1522,7 @@ async function loadStandings() {
       <div class="standings-header">
         <div>
           <span class="standings-title">Drivers</span>
-          <span style="font-size:0.65rem;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.06em;text-transform:uppercase; display:block;">After ${lastMeeting.is_testing ? 'Testing' : 'RW' + lastMeeting.race_week}</span>
+          <span style="font-size:0.65rem;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.06em;text-transform:uppercase; display:block;">After ${lastMeeting.is_testing ? 'Testing' : 'Race ' + lastMeeting.race_week}</span>
         </div>
         <button class="mobile-close-btn" onclick="toggleMobileStandings('standings-drivers')">✕</button>
       </div>
@@ -1547,7 +1547,7 @@ async function loadStandings() {
       <div class="standings-header">
         <div>
           <span class="standings-title">Constructors</span>
-          <span style="font-size:0.65rem;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.06em;text-transform:uppercase; display:block;">After ${lastMeeting.is_testing ? 'Testing' : 'RW' + lastMeeting.race_week}</span>
+          <span style="font-size:0.65rem;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.06em;text-transform:uppercase; display:block;">After ${lastMeeting.is_testing ? 'Testing' : 'Race ' + lastMeeting.race_week}</span>
         </div>
         <button class="mobile-close-btn" onclick="toggleMobileStandings('standings-constructors')">✕</button>
       </div>
@@ -1629,7 +1629,7 @@ function renderSeason() {
       const isPast = new Date(m.date_end) < NOW;
       const isNext = next && m.meeting_key === next.meeting_key;
       if (isPast || isNext) {
-        const prefix = m.is_testing ? 'TEST' : `RW${m.race_week}`;
+        const prefix = m.is_testing ? 'TEST' : `Race ${m.race_week}`;
         options += `<option value="${m.meeting_key}">${prefix} - ${m.meeting_name}</option>`;
       }
     });
@@ -2135,7 +2135,7 @@ async function viewDriverDetails(driverNumber) {
       const isPast = new Date(m.date_end) < NOW;
       const isNext = next && m.meeting_key === next.meeting_key;
       if (isPast || isNext) {
-        const prefix = m.is_testing ? 'TEST' : `RW${m.race_week}`;
+        const prefix = m.is_testing ? 'TEST' : `Race ${m.race_week}`;
         options += `<option value="${m.meeting_key}" ${currentMeeting && m.meeting_key === currentMeeting.meeting_key ? 'selected' : ''}>${prefix} - ${m.meeting_name}</option>`;
       }
     });
@@ -2498,7 +2498,7 @@ async function openDriverProfile(driverNumber) {
       const myRaceLaps = allSessionLaps.filter(l => l.driver_number === driverNumber);
 
       const meeting = allMeetings.find(m => m.meeting_key === s.meeting_key);
-      const roundText = meeting ? (meeting.is_testing ? 'TEST' : `RW${meeting.race_week}`) : '';
+      const roundText = meeting ? (meeting.is_testing ? 'TEST' : `Race ${meeting.race_week}`) : '';
       const dateString = meeting ? `${fmtDate(meeting.date_start)} - ${fmtDate(meeting.date_end)}` : '';
       
       // 1. Color-Code the Practice Sessions
@@ -3143,7 +3143,7 @@ async function openTeamProfile(teamName) {
       // ... keep the rest of the loop below this exactly as it is (meeting lookup, HTML building) ...
 
       const meeting = allMeetings.find(m => m.meeting_key === s.meeting_key);
-      const roundText = meeting ? (meeting.is_testing ? 'TEST' : `RW${meeting.race_week}`) : '';
+      const roundText = meeting ? (meeting.is_testing ? 'TEST' : `Race ${meeting.race_week}`) : '';
       const dateString = meeting ? `${fmtDate(meeting.date_start)} - ${fmtDate(meeting.date_end)}` : '';
       const badgeHtml = isSprint ? `<span style="background:#E87D2B; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle;">SPRINT</span>` : '';
 
