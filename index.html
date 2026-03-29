@@ -297,8 +297,32 @@
       <div class="view active" id="view-season">
         <div class="view-title" id="season-title-text">2026 Formula One World Championship</div>
         <div class="view-sub" id="season-sub">Loading calendar...</div>
-        <div id="season-grid" class="season-grid">
-          <div class="loading"><div class="spinner"></div>Fetching calendar</div>
+        
+        <div id="season-main-tabs" class="subtabs">
+          <button class="subtab-btn active" id="season-tab-btn-weekends" onclick="switchSeasonTab('weekends')">Race Weekends</button>
+          <button class="subtab-btn" id="season-tab-btn-summary" onclick="switchSeasonTab('summary')">Season Summary</button>
+          <button class="subtab-btn" id="season-tab-btn-testing" onclick="switchSeasonTab('testing')">Pre-Season Testing</button>      
+        </div>
+
+        <div id="season-tab-content-weekends" class="subtab-content active">
+          <div id="season-grid" class="season-grid">
+            <div class="loading"><div class="spinner"></div>Fetching calendar</div>
+          </div>
+        </div>
+
+        <div id="season-tab-content-summary" class="subtab-content">
+          <div id="season-summary-leaders" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+            <div class="loading" style="grid-column: 1 / -1; padding: 2rem;"><div class="spinner"></div>Loading championship leaders...</div>
+          </div>
+          <div id="season-championship-battle-area" style="color:var(--text-dim); padding:2rem 1rem; text-align:center;">
+             Championship battle timeline coming soon...
+          </div>
+        </div>
+
+        <div id="season-tab-content-testing" class="subtab-content">
+          <div id="season-grid-testing" class="season-grid">
+            <div class="loading"><div class="spinner"></div>Fetching testing data</div>
+          </div>
         </div>
       </div>
 
@@ -317,33 +341,55 @@
         <div id="subtabs-wrapper">
           
           <div id="subtab-content-track-dominance" class="subtab-content">
-            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1.5rem;">
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1rem;">
               <div class="standings-title" style="margin-bottom: 0.5rem; font-size: 0.8rem;">Drivers to Compare</div>
-              <div style="display: flex; gap: 1rem; align-items: center;">
-                <select id="dom-driver-a" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="renderTrackDominance()"></select>
+              
+              <div style="display: flex; gap: 1.5rem; align-items: center;">
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                  <select id="dom-driver-a" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="renderTrackDominance()"></select>
+                  <span id="dom-time-a" style="font-family:'Barlow Condensed'; font-size:1.3rem; color:var(--text);"></span>
+                </div>
                 <span style="font-family:'Barlow Condensed'; font-size:1.2rem; font-weight:700; color:var(--text-dim);">VS</span>
-                <select id="dom-driver-b" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="renderTrackDominance()"></select>
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                  <span id="dom-time-b" style="font-family:'Barlow Condensed'; font-size:1.3rem; color:var(--text);"></span>
+                  <select id="dom-driver-b" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="renderTrackDominance()"></select>
+                </div>
               </div>
-            </div>
+              </div>
             
             <div id="dom-loading" class="loading" style="display:none;"><div class="spinner"></div>Analyzing Telemetry...</div>
             
             <div id="dom-results" style="display:none;">
+              
+              <div id="dom-trace-container" style="width: 100%; margin-bottom: 2.5rem;">
+                <div class="standings-title" style="margin-bottom: 0.5rem; text-align: left;">Telemetry Trace</div>
+                <div id="dom-trace-body" style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1rem;">
+                </div>
+              </div>
+
               <div style="max-width: 600px; margin: 0 auto;">
                 
-                <div id="dom-analysis" class="stats-bar" style="margin-bottom:1.5rem; justify-content:space-around; background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1rem;"></div>
+                <div class="standings-title" style="margin-bottom: 0.5rem; text-align: left;">Sector Comparison</div>
+                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:1.5rem; text-align:center; position: relative;">
+                  
+                  <button id="dom-toggle-times-btn" class="theme-toggle" onclick="toggleMiniSectors()" style="position: absolute; top: 1.25rem; right: 1.25rem; padding: 0.3rem 0.8rem; z-index: 10;">Show Sector Times</button>
 
-                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:1.5rem; text-align:center;">
+                  <div id="dom-analysis" class="stats-bar" style="margin-bottom:1.5rem; justify-content:flex-start; gap: 3rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border); text-align: left;"></div>
+
                   <canvas id="trackMapCanvas" width="800" height="400" style="max-width:100%; height:auto; margin: 0 auto; display: block;"></canvas>
                   <div id="dom-map-legend" style="display:flex; justify-content:center; gap:1.5rem; margin-top:1.5rem; font-family:'Barlow Condensed'; font-size:0.9rem; font-weight:700;"></div>
                 </div>
                 
-                <div class="standings-title" style="margin-bottom: 0.5rem; text-align: center;">Mini Sector Times (Seconds)</div>
-                <div id="dom-mini-sectors" style="background:var(--surface); border:1px solid var(--border); border-radius:4px; overflow:hidden;"></div>
-                
+                <div id="dom-mini-sectors-wrapper" style="display:none; margin-bottom: 1.5rem;">
+                  <div class="standings-title" style="margin-bottom: 0.5rem; text-align: center;">Mini Sector Times (Seconds)</div>
+                  <div id="dom-mini-sectors" style="background:var(--surface); border:1px solid var(--border); border-radius:4px; overflow:hidden;"></div>
+                </div>
               </div>
+
             </div>
-          </div> <div id="subtab-content-results" class="subtab-content active">
+          </div>
+          
+          <div id="subtab-content-results" class="subtab-content active">
             <div id="stats-bar" class="stats-bar"></div>
             <div id="drivers-list" class="drivers-list">
               <div class="loading"><div class="spinner"></div>Fetching results</div>
@@ -447,32 +493,13 @@
         <div id="driver-detail-session-tabs" class="session-tabs"></div>
         
         <div id="driver-subtabs-container" class="subtabs">
-          <button class="subtab-btn active" id="driver-subtab-btn-tire-strategy" onclick="switchDriverSubTab('tire-strategy')">Pit Stops</button>
-          <button class="subtab-btn" id="driver-subtab-btn-lap-times" onclick="switchDriverSubTab('lap-times')">Lap Times</button>
+          <button class="subtab-btn active" id="driver-subtab-btn-tire-strategy" onclick="switchDriverSubTab('tire-strategy')">Lap Times</button>
           <button class="subtab-btn" id="driver-subtab-btn-places" onclick="switchDriverSubTab('places')">Positions Gained/Lost</button>
         </div>
 
         <div id="driver-subtabs-wrapper">
           <div id="driver-subtab-content-tire-strategy" class="subtab-content active">
-            <div style="margin-bottom: 2rem;">
-              <div class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
-                <span>Race Strategy</span>
-                <span>Total Laps: --</span>
-              </div>
-              <div style="width: 100%; position: relative;">
-                <div id="detail-sc-track" style="position:relative; width:100%; height:12px; background:var(--surface2); border-radius:2px; overflow:hidden; margin-bottom:4px; display:none;"></div>
-                <div class="stint-track" id="detail-stint-track" style="height: 28px;"></div>
-              </div>
             </div>
-            <div class="standings-title" style="margin-bottom: 0.5rem;">Pace Analysis</div>
-            <div style="position: relative; height: 400px; width: 100%;">
-              <canvas id="lapTimeChart"></canvas>
-            </div>
-          </div>
-          
-          <div id="driver-subtab-content-lap-times" class="subtab-content">
-            <div class="loading"><div class="spinner"></div>Loading lap times...</div>
-          </div>
           
           <div id="driver-subtab-content-places" class="subtab-content">
             <div id="driver-places-stat" style="margin-bottom: 1.5rem;"></div>
@@ -734,6 +761,58 @@ function fmtLapTime(secs) {
   return m > 0 ? `${m}:${s}` : `${s}`;
 }
 
+// Global Helper: Mathematically derive track corners from GPS telemetry
+function calculateTrackCorners(trackX, trackY) {
+    const NUM_POINTS = trackX.length - 1;
+    const headings = [], curvatures = [], smoothCurv = [];
+    
+    // 1. Calculate heading direction
+    for(let i=0; i<=NUM_POINTS; i++) {
+        if (i===0) headings.push(0);
+        else headings.push(Math.atan2(trackY[i] - trackY[i-1], trackX[i] - trackX[i-1]));
+    }
+
+    // 2. Calculate angular change (curvature)
+    for(let i=0; i<=NUM_POINTS; i++) {
+        if (i===0) curvatures.push(0);
+        else {
+            let diff = headings[i] - headings[i-1];
+            while(diff > Math.PI) diff -= 2*Math.PI;
+            while(diff < -Math.PI) diff += 2*Math.PI;
+            curvatures.push(Math.abs(diff));
+        }
+    }
+
+    // 3. Smooth the noise out of the GPS data
+    const w = 2;
+    for(let i=0; i<=NUM_POINTS; i++) {
+        let sum = 0, count = 0;
+        for(let j=Math.max(0, i-w); j<=Math.min(NUM_POINTS, i+w); j++){
+            sum += curvatures[j]; count++;
+        }
+        smoothCurv.push(sum/count);
+    }
+
+    // 4. Find the peaks (apexes)
+    const corners = [];
+    let turnCount = 1;
+    for(let i=3; i<NUM_POINTS-3; i++) {
+        let isPeak = true;
+        for(let j=-3; j<=3; j++) {
+            if(smoothCurv[i+j] > smoothCurv[i]) { isPeak = false; break; }
+        }
+        // Threshold checks for a significant physical turn
+        if (isPeak && smoothCurv[i] > 0.035) {
+            // Ensure corners aren't registered too close to each other
+            if(corners.length === 0 || (i - corners[corners.length-1].index) > 6) {
+                corners.push({ index: i, text: 'T' + turnCount });
+                turnCount++;
+            }
+        }
+    }
+    return corners;
+}
+
 function fmtSectorTime(secs) {
   if (!secs || secs <= 0) return null;
   return secs.toFixed(3);
@@ -785,6 +864,7 @@ function goHome() {
   currentSession = null;
   updateBreadcrumb();
   showView('view-season');
+  switchSeasonTab('weekends'); // <--- ADD THIS
 }
 
 function toggleTheme() {
@@ -847,6 +927,16 @@ function switchDriverSubTab(tabId) {
   if (tabId === 'lap-times' && currentDriverView && currentSession) {
     renderBoxWhisker('driver-subtab-content-lap-times', currentDriverView);
   }
+}
+
+function switchSeasonTab(tabId) {
+  document.querySelectorAll('#season-main-tabs .subtab-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`season-tab-btn-${tabId}`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  document.querySelectorAll('#view-season .subtab-content').forEach(content => content.classList.remove('active'));
+  const activeContent = document.getElementById(`season-tab-content-${tabId}`);
+  if (activeContent) activeContent.classList.add('active');
 }
 
 function updateDriverSubTabsForSession() {
@@ -934,39 +1024,28 @@ async function renderSessionStints(containerId) {
     ]);
 
     const maxLaps = laps.length > 0 ? Math.max(...laps.map(l => l.lap_number || 0)) : 1;
+    const lapRange = Math.max(1, maxLaps - 1);
+    
     const leaderLaps = laps.filter(l => l.driver_number === orderedDriversList[0].driver_number);
     const scPeriods = await getSafetyCarPeriods(currentSession.session_key, leaderLaps);
     
-    // --- NEW: Conditionally render Track Status ---
-    let scTrackHtml = '';
-    let trackStatusRowHtml = '';
+    const isLight = document.body.dataset.theme === 'light';
+    const scOverlayColor = isLight ? 'rgba(255, 204, 0, 0.45)' : 'rgba(255, 204, 0, 0.2)';
+    const vscOverlayColor = isLight ? 'rgba(255, 102, 0, 0.45)' : 'rgba(255, 102, 0, 0.2)';
     
+    // Create the global overlay bars
+    let globalScBarsHtml = '';
     if (scPeriods.length > 0) {
-      scTrackHtml = `<div style="position:relative; width:100%; height:16px; background:var(--surface2); border-radius:3px; overflow:hidden;">`;
       scPeriods.forEach(p => {
-          const leftPct = ((p.startLap - 1) / maxLaps) * 100;
-          const widthPct = ((p.endLap - p.startLap) / maxLaps) * 100;
+          const leftPct = ((p.startLap - 1) / lapRange) * 100;
+          const widthPct = ((p.endLap - p.startLap) / lapRange) * 100;
           const isSC = p.type === 'SC';
-          const color1 = isSC ? '#ffcc00' : '#ff6600'; // Yellow SC, Orange VSC
-          const color2 = '#222222';
-          const bg = `repeating-linear-gradient(45deg, ${color1}, ${color1} 6px, ${color2} 6px, ${color2} 12px)`;
+          const color = isSC ? scOverlayColor : vscOverlayColor;
+          const borderCol = isSC ? '#ffcc00' : '#ff6600';
           
-          scTrackHtml += `<div style="position:absolute; left:${leftPct}%; width:${widthPct}%; height:100%; background:${bg}; border-left: 2px solid ${color1}; border-right: 2px solid ${color1}; display:flex; align-items:center; justify-content:center; box-shadow: 0 0 5px rgba(0,0,0,0.5);">
-              <span style="background:#000; color:${color1}; font-size:0.6rem; font-weight:900; padding:0 4px; border-radius:2px; line-height:1.2;">${p.type}</span>
-          </div>`;
+          globalScBarsHtml += `<div style="position:absolute; top:-0.5rem; bottom:-0.5rem; left:${leftPct}%; width:${widthPct}%; background:${color}; border-left: 1px solid ${borderCol}; border-right: 1px solid ${borderCol}; pointer-events:none; z-index:5;"></div>`;
       });
-      scTrackHtml += `</div>`;
-
-      trackStatusRowHtml = `
-        <div class="stint-row" style="grid-template-columns: 5rem 1fr; margin-bottom: 1rem; height: auto;">
-          <div style="display:flex; align-items:center; justify-content:flex-end;">
-            <span style="font-size:0.65rem; font-weight:700; color:var(--text-dim); font-family:'Barlow Condensed', sans-serif; text-transform:uppercase;">Track Status</span>
-          </div>
-          <div>${scTrackHtml}</div>
-        </div>
-      `;
     }
-    // ----------------------------------------------
 
     const driverStints = {};
     stints.forEach(s => {
@@ -976,9 +1055,8 @@ async function renderSessionStints(containerId) {
 
     let html = `<div style="padding: 1.5rem 0;">`;
     
-    // Inject dynamic Legend if needed
     html += `
-      <div style="display: grid; grid-template-columns: 5rem 1fr; gap: 1rem; margin-bottom: 0.5rem;">
+      <div style="display: grid; grid-template-columns: 5.5rem 1fr; gap: 1rem; margin-bottom: 0.5rem;">
         <div></div>
         <div class="standings-title" style="display:flex; justify-content:space-between;">
           <span>Race Strategy ${scPeriods.length > 0 ? `<span style="color:#ffcc00; margin-left:10px; font-weight:900;">█ SC</span> <span style="color:#ff6600; margin-left:5px; font-weight:900;">█ VSC</span>` : ''}</span>
@@ -987,7 +1065,12 @@ async function renderSessionStints(containerId) {
       </div>
     `;
 
-    html += trackStatusRowHtml;
+    // Wrapper for ALL rows + The massive absolute SC overlay
+    html += `<div style="position:relative;">`;
+    if (scPeriods.length > 0) {
+        // Grid column 2 (1fr) starts at exactly 6.5rem (5.5rem + 1rem gap)
+        html += `<div style="position:absolute; top:0; bottom:0; left:6.5rem; right:0; pointer-events:none; z-index:5;">${globalScBarsHtml}</div>`;
+    }
 
     orderedDriversList.forEach(driver => {
       const dn = driver.driver_number;
@@ -999,46 +1082,54 @@ async function renderSessionStints(containerId) {
       if (dStints.length === 0) {
         trackHtml = `<div style="font-size:0.75rem; color:var(--text-dim); padding-left:0.5rem; display:flex; align-items:center;">No tire data</div>`;
       } else {
-        dStints.forEach(stint => {
-          const stintLength = (stint.lap_end - stint.lap_start) + 1;
-          const widthPct = (stintLength / maxLaps) * 100;
+        dStints.forEach((stint, idx) => {
+          // Close the gap between stints for seamless visuals
+          let startPoint = stint.lap_start - 1;
+          let endPoint = stint.lap_end - 1;
+          if (idx < dStints.length - 1) {
+              const nextStint = dStints[idx + 1];
+              endPoint = (stint.lap_end - 1 + nextStint.lap_start - 1) / 2;
+          } else {
+              endPoint = maxLaps - 1;
+          }
+
+          const widthPct = ((endPoint - startPoint) / lapRange) * 100;
           const rawCompound = stint.compound ? stint.compound.toUpperCase() : 'MEDIUM';
           const compoundClass = `tire-${rawCompound}`;
-          const tireLabel = rawCompound[0]; // Will correctly grab 'M'
+          const tireLabel = rawCompound[0]; 
           
           if (widthPct > 0) {
-            trackHtml += `<div class="tire-bar ${compoundClass}" style="width: ${widthPct}%" title="${stint.compound} (${stintLength} Laps)">${tireLabel}</div>`;
+            trackHtml += `<div class="tire-bar ${compoundClass}" style="width: ${widthPct}%" title="${stint.compound} (${stint.lap_end - stint.lap_start} Laps)">${tireLabel}</div>`;
           }
         });
       }
 
       html += `
-        <div class="stint-row" style="grid-template-columns: 5.5rem 1fr; cursor:pointer; transition: opacity 0.15s;" 
+        <div class="stint-row" style="grid-template-columns: 5.5rem 1fr; cursor:pointer; position:relative; z-index:1; transition: opacity 0.15s;" 
              onclick="previousView='view-drivers'; viewDriverDetails(${dn}); setTimeout(() => switchDriverSubTab('tire-strategy'), 50);"
              onmouseover="this.style.opacity='0.75'" 
              onmouseout="this.style.opacity='1'">
           <div style="display:flex; align-items:center; justify-content:flex-end; gap:0.5rem;">
             <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted); font-family:'Barlow Condensed', sans-serif;">${driver.position || '-'}</span>
-            
             <div class="driver-num-badge" style="background:${tc.bg}; color:${tc.text}; width:68px; flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:center; gap:6px;">
               ${getTeamLogoHtml(driver.team_name, '10px', tc.text)}
               <span style="font-size:0.85rem; letter-spacing:0.05em;">${acronym}</span>
             </div>
-            
           </div>
-          <div class="stint-track">${trackHtml}</div>
+          <div class="stint-track" style="position:relative;">
+            ${trackHtml}
+          </div>
         </div>
       `;
     });
 
-    html += `</div>`; 
+    html += `</div></div>`; 
     container.innerHTML = html;
 
   } catch (e) {
     container.innerHTML = `<div class="error-msg">Could not load strategy data. ${e.message}</div>`;
   }
 }
-
 
 async function getPitStopData(sessionKey, driverNumber = null) {
   const allStops = await fetchJSON(`${BASE}/pit_stops?session_key=${sessionKey}`).catch(() => []);
@@ -1129,333 +1220,646 @@ async function getLapAnalysisData(sessionKey, driverNumber = null) {
 async function renderBoxWhisker(containerId, driverNumber) {
   const container = document.getElementById(containerId);
   if (!container || !currentSession) return;
-  container.innerHTML = `<div class="loading"><div class="spinner"></div>Loading lap times...</div>`;
+  container.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing Race Pace...</div>`;
 
   try {
-    const [allLaps, allStints] = await Promise.all([
+    // 1. Fetch laps and safety car data
+    const [allLaps, scPeriodsData] = await Promise.all([
       getLapAnalysisData(currentSession.session_key),
-      getStintData(currentSession.session_key)
+      getSafetyCarPeriods(currentSession.session_key, await getLapAnalysisData(currentSession.session_key, orderedDriversList[0]?.driver_number))
     ]);
 
-    const COMPOUNDS = ['SOFT', 'MEDIUM', 'HARD', 'INTERMEDIATE', 'WET'];
-    const COMPOUND_COLORS = {
-      SOFT: '#ff3333', MEDIUM: '#ffd12b', HARD: '#ffffff',
-      INTERMEDIATE: '#33cc33', WET: '#0066ff'
-    };
+    const scPeriods = scPeriodsData || [];
+    const isSCLap = (lapNum) => scPeriods.some(p => lapNum >= Math.floor(p.startLap) && lapNum <= Math.ceil(p.endLap));
+
+    // 2. Filter raw laps (Remove pits and Safety Cars)
+    const driverData = {};
+    allLaps.forEach(l => {
+      if (!l.lap_duration || l.lap_duration <= 0 || l.is_pit_out_lap || l.is_pit_in_lap || isSCLap(l.lap_number)) return;
+      if (!driverData[l.driver_number]) driverData[l.driver_number] = [];
+      driverData[l.driver_number].push(l.lap_duration);
+    });
+
+    const validDrivers = [];
+    
+    // 3. Clean extreme outliers (traffic/mistakes) and calculate averages
+    orderedDriversList.forEach(d => {
+        const times = driverData[d.driver_number] || [];
+        if (times.length > 0) {
+            const sorted = [...times].sort((a,b) => a-b);
+            const median = sorted[Math.floor(sorted.length / 2)];
+            const cleanTimes = sorted.filter(t => t <= median * 1.10); // Remove any lap 10% slower than median
+
+            if (cleanTimes.length > 0) {
+                const mean = cleanTimes.reduce((a,b) => a+b, 0) / cleanTimes.length;
+                validDrivers.push({
+                    ...d,
+                    times: cleanTimes,
+                    mean: mean,
+                    median: median,
+                    q1: cleanTimes[Math.floor(cleanTimes.length * 0.25)],
+                    q3: cleanTimes[Math.floor(cleanTimes.length * 0.75)]
+                });
+            }
+        }
+    });
+
+    if (validDrivers.length === 0) {
+        container.innerHTML = `<div class="error-msg">No clean racing laps available for pace analysis.</div>`;
+        return;
+    }
+
+    // 4. Rank drivers by fastest average pace
+    validDrivers.sort((a, b) => a.mean - b.mean);
+    const bestMean = validDrivers[0].mean;
+
+    // --- INTERACTIVE RENDERING STATE ---
+    let currentDrivers = [...validDrivers];
+    let isDragging = false;
+    let startX = 0;
+
     const isLight = document.body.dataset.theme === 'light';
-    const HARD_COLOR = isLight ? '#777' : '#cccccc';
     const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
-    const textColor = isLight ? '#444' : '#888';
+    const tickColor = isLight ? '#444' : '#aaa';
     const surfaceColor = isLight ? '#f8f8f6' : '#1a1a1a';
     const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
 
-    // Map stints: driver_number → [{lap_start, lap_end, compound}]
-    const stintMap = {};
-    allStints.forEach(s => {
-      if (!stintMap[s.driver_number]) stintMap[s.driver_number] = [];
-      stintMap[s.driver_number].push(s);
-    });
+    const drawChart = () => {
+        if (currentDrivers.length === 0) return;
 
-    function getCompound(driverNum, lapNum) {
-      const stints = stintMap[driverNum] || [];
-      const stint = stints.find(s => lapNum >= s.lap_start && lapNum <= s.lap_end);
-      // THE FIX: Default missing box plot data to MEDIUM
-      return stint ? (stint.compound || 'MEDIUM').toUpperCase() : 'MEDIUM';
-    }
-
-    // Build driverData[driverNum][compound] = [times]
-    // Build driverData[driverNum][compound] = [times]
-    const driverData = {};
-    const driverSet = new Set();
-    allLaps.forEach(l => {
-      // THE FIX: Exclude both out-laps AND in-laps to remove extreme outliers!
-      if (!l.lap_duration || l.lap_duration <= 0 || l.is_pit_out_lap || l.is_pit_in_lap) return;
-      if (driverNumber && l.driver_number !== driverNumber) return;
-      
-      const compound = getCompound(l.driver_number, l.lap_number);
-      if (!COMPOUNDS.includes(compound)) return;
-      
-      if (!driverData[l.driver_number]) driverData[l.driver_number] = {};
-      if (!driverData[l.driver_number][compound]) driverData[l.driver_number][compound] = [];
-      driverData[l.driver_number][compound].push(l.lap_duration);
-      driverSet.add(l.driver_number);
-    });
-
-    if (driverSet.size === 0) {
-      container.innerHTML = `<div class="error-msg">No lap time data available for this session.</div>`;
-      return;
-    }
-
-    const usedCompounds = COMPOUNDS.filter(c =>
-      Object.values(driverData).some(d => d[c]?.length > 0)
-    );
-
-    function boxStats(times) {
-      const sorted = [...times].sort((a, b) => a - b);
-      const median = sorted[Math.floor(sorted.length / 2)];
-      const clean = sorted.filter(t => t <= median * 1.15);
-      if (clean.length === 0) return null;
-      return {
-        min: clean[0],
-        q1: clean[Math.floor(clean.length * 0.25)],
-        median: clean[Math.floor(clean.length / 2)],
-        q3: clean[Math.floor(clean.length * 0.75)],
-        max: clean[clean.length - 1],
-        mean: clean.reduce((a, b) => a + b, 0) / clean.length
-      };
-    }
-
-    // Global X range across all data
-    let globalMin = Infinity, globalMax = -Infinity;
-    Object.values(driverData).forEach(compMap => {
-      Object.values(compMap).forEach(times => {
-        const s = boxStats(times);
-        if (s) { globalMin = Math.min(globalMin, s.min); globalMax = Math.max(globalMax, s.max); }
-      });
-    });
-    const xPad = (globalMax - globalMin) * 0.06;
-    const xMin = globalMin - xPad;
-    const xMax = globalMax + xPad;
-
-    // ─────────────────────────────────────────────────────────────
-    // SESSION-WIDE VIEW: horizontal, drivers on Y, time on X
-    // grouped rows per driver: SOFT → MEDIUM → HARD
-    // ranked by fastest median lap across any compound
-    // ─────────────────────────────────────────────────────────────
-    if (!driverNumber) {
-      const allDrivers = orderedDriversList.filter(d => driverSet.has(d.driver_number));
-
-      // Rank by fastest median across all compounds
-      const driverBest = {};
-      allDrivers.forEach(d => {
-        const dn = d.driver_number;
-        let best = Infinity;
-        usedCompounds.forEach(c => {
-          const s = boxStats(driverData[dn]?.[c] || []);
-          if (s) best = Math.min(best, s.median);
+        let minT = Infinity, maxT = -Infinity;
+        currentDrivers.forEach(d => {
+            minT = Math.min(minT, ...d.times);
+            maxT = Math.max(maxT, ...d.times);
         });
-        driverBest[dn] = best;
-      });
-      const rankedDrivers = [...allDrivers].sort((a, b) => driverBest[a.driver_number] - driverBest[b.driver_number]);
 
-      const ROW_H = 16;       
-      const ROW_GAP = 3;      
-      const DRIVER_GAP = 14;  
-      const LABEL_W = 90;     // Slightly wider to accommodate the solid badges
-      const RIGHT_PAD = 16;
-      const TOP_PAD = 64;     // THE FIX: Increased padding to push the chart down!
-      const BOTTOM_PAD = 8;
-      
-      // NEW: High contrast text colors for the axes and legend
-      const axisTextColor = isLight ? '#111' : '#eee'; 
-      const hoverBg = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)';
+        const yPad = (maxT - minT) * 0.1 || 1;
+        minT -= yPad;
+        maxT += yPad;
 
-      const compoundsPerDriver = usedCompounds.length;
-      const driverBlockH = compoundsPerDriver * ROW_H + (compoundsPerDriver - 1) * ROW_GAP;
-      const totalH = TOP_PAD + rankedDrivers.length * (driverBlockH + DRIVER_GAP) + BOTTOM_PAD;
-      const svgViewW = 800;
-      const chartW = svgViewW - LABEL_W - RIGHT_PAD;
+        // DYNAMIC LAYOUT MATH
+        const svgViewW = 1000; // Fixed internal coordinate width
+        const CHART_H = 400;
+        const LEFT_PAD = 80;
+        const RIGHT_PAD = 40;
+        const TOP_PAD = 20;
+        const BOTTOM_PAD = 100; // Space for labels underneath
 
-      function xPx(val) {
-        return LABEL_W + ((val - xMin) / (xMax - xMin)) * chartW;
-      }
+        const svgHeight = CHART_H + TOP_PAD + BOTTOM_PAD;
+        
+        // Calculate dynamic width and spacing based on the number of drivers in view
+        const availableW = svgViewW - LEFT_PAD - RIGHT_PAD;
+        const step = availableW / currentDrivers.length;
+        const BOX_W = Math.min(step * 0.75, 140); // Cap width to 140px so they don't look ridiculous when zoomed
 
-      // Grid lines along X axis (time)
-      let svgContent = '';
-      const numTicks = 7;
-      for (let i = 0; i <= numTicks; i++) {
-        const val = xMin + (i / numTicks) * (xMax - xMin);
-        const x = xPx(val);
-        svgContent += `<line x1="${x}" y1="${TOP_PAD - 8}" x2="${x}" y2="${totalH - BOTTOM_PAD}" stroke="${gridColor}" stroke-width="1"/>`;
-        // Made text much larger (14px) and brighter
-        svgContent += `<text x="${x}" y="${TOP_PAD - 12}" text-anchor="middle" fill="${axisTextColor}" font-family="Barlow Condensed,sans-serif" font-size="14" font-weight="600">${fmtLapTime(val)}</text>`;
-      }
+        const yPx = (val) => TOP_PAD + (1 - (val - minT) / (maxT - minT)) * CHART_H;
 
-      // Draw each driver
-      rankedDrivers.forEach((driver, di) => {
-        const dn = driver.driver_number;
-        const tc = teamColor(driver.team_name);
-        const driverY = TOP_PAD + di * (driverBlockH + DRIVER_GAP);
-        const acronym = driver.name_acronym || (driver.last_name ? driver.last_name.substring(0, 3).toUpperCase() : '???');
-
-        const labelCY = driverY + driverBlockH / 2;
-        const badgeW = 60; // Increased width to fit logo and text
-        const badgeH = 26;
-        const badgeX = LABEL_W - badgeW - 8;
-        const badgeY = labelCY - badgeH / 2;
-
-        // Find team logo info to inject into the SVG badge
-        let tInfo = TEAM_INFO[driver.team_name];
-        if (!tInfo) {
-          for (const [k, v] of Object.entries(TEAM_INFO)) {
-            if (driver.team_name && (driver.team_name.includes(k) || k.includes(driver.team_name))) { tInfo = v; break; }
-          }
-        }
-
-        let svgLogoHtml = '';
-        if (tInfo && tInfo.logo) {
-            const logoW = 16;
-            const logoH = 12;
-            const logoXPos = badgeX + 6;
-            
-            // Force high-contrast based on badge text color (exempting Ferrari and Red Bull Racing)
-            const keepOriginalColor = driver.team_name === 'Ferrari' || driver.team_name === 'Red Bull Racing';
-            let filterCss = '';
-            if (!keepOriginalColor) {
-                filterCss = tc.text === '#fff' ? 'filter: invert(1) brightness(2);' : 'filter: brightness(0);';
+        function gaussianKDE(x, data, bw) {
+            let sum = 0;
+            for(let i=0; i<data.length; i++){
+                let v = (x - data[i]) / bw;
+                sum += Math.exp(-0.5 * v * v);
             }
-            
-            svgLogoHtml = `<image href="${tInfo.logo}" x="${logoXPos}" y="${labelCY - logoH / 2}" height="${logoH}" width="${logoW}" preserveAspectRatio="xMidYMid meet" style="${filterCss}" pointer-events="none" />`;
+            return sum / (data.length * bw * Math.sqrt(2 * Math.PI));
         }
 
-        // Center text in the remaining space of the badge
-        const textXPos = badgeX + 16 + 8 + ((badgeW - 16 - 8) / 2);
+        let svgContent = '';
 
-        svgContent += `
-          <g style="cursor:pointer;" onclick="previousView='view-drivers'; viewDriverDetails(${dn}); setTimeout(() => switchDriverSubTab('lap-times'), 50);">
-            <rect x="0" y="${driverY - 4}" width="${svgViewW}" height="${driverBlockH + 8}" fill="transparent" onmouseover="this.setAttribute('fill', '${hoverBg}')" onmouseout="this.setAttribute('fill', 'transparent')" />
-            <rect x="${badgeX}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="2" fill="${tc.bg}" pointer-events="none" />
-            ${svgLogoHtml}
-            <text x="${textXPos}" y="${labelCY + 4}" text-anchor="middle" fill="${tc.text}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700" pointer-events="none">${acronym}</text>
-          </g>`;
-
-        // Subtle row separator
-        if (di > 0) {
-          svgContent += `<line x1="${LABEL_W}" y1="${driverY - DRIVER_GAP / 2}" x2="${svgViewW - RIGHT_PAD}" y2="${driverY - DRIVER_GAP / 2}" stroke="${gridColor}" stroke-width="0.5"/>`;
+        // Draw Y-Axis Grid Lines
+        const numTicks = 8;
+        for(let i=0; i<=numTicks; i++) {
+            const val = minT + (i/numTicks)*(maxT - minT);
+            const y = yPx(val);
+            svgContent += `<line x1="${LEFT_PAD}" y1="${y}" x2="${svgViewW - RIGHT_PAD}" y2="${y}" stroke="${gridColor}" stroke-width="1"/>`;
+            svgContent += `<text x="${LEFT_PAD - 8}" y="${y + 4}" text-anchor="end" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="12">${fmtLapTime(val)}</text>`;
         }
 
-        // Draw each compound strip
-        usedCompounds.forEach((compound, ci) => {
-          const times = driverData[dn]?.[compound] || [];
-          const s = boxStats(times);
-          const rowY = driverY + ci * (ROW_H + ROW_GAP);
-          const cy = rowY + ROW_H / 2;
-          const color = compound === 'HARD' ? HARD_COLOR : (COMPOUND_COLORS[compound] || '#888');
+        currentDrivers.forEach((d, ci) => {
+            const tc = teamColor(d.team_name);
+            const cx = LEFT_PAD + (ci * step) + (step / 2); // Center of the driver's column
 
-          if (!s) {
-            svgContent += `<line x1="${LABEL_W + 4}" y1="${cy}" x2="${LABEL_W + 20}" y2="${cy}" stroke="${color}" stroke-width="1" opacity="0.2"/>`;
-            return;
-          }
+            const bw = 0.3;
+            const steps = 100;
+            const stepSize = (maxT - minT) / steps;
+            const densities = [];
+            let maxDensity = 0;
 
-          const xQ1 = xPx(s.q1), xQ3 = xPx(s.q3), xMed = xPx(s.median);
-          const xWMin = xPx(s.min), xWMax = xPx(s.max), xMean = xPx(s.mean);
-          const capH = ROW_H * 0.45;
+            for(let i=0; i<=steps; i++) {
+                const v = minT + i * stepSize;
+                const den = gaussianKDE(v, d.times, bw);
+                densities.push({ v, d: den });
+                if (den > maxDensity) maxDensity = den;
+            }
 
-          // Whisker lines
-          svgContent += `<line x1="${xWMin}" y1="${cy}" x2="${xQ1}" y2="${cy}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>`;
-          svgContent += `<line x1="${xQ3}" y1="${cy}" x2="${xWMax}" y2="${cy}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>`;
-          // Whisker caps
-          svgContent += `<line x1="${xWMin}" y1="${cy - capH}" x2="${xWMin}" y2="${cy + capH}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>`;
-          svgContent += `<line x1="${xWMax}" y1="${cy - capH}" x2="${xWMax}" y2="${cy + capH}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>`;
-          // IQR box
-          svgContent += `<rect x="${xQ1}" y="${rowY + 1}" width="${xQ3 - xQ1}" height="${ROW_H - 2}" fill="${color}" fill-opacity="0.2" stroke="${color}" stroke-width="1.2" rx="2"/>`;
-          // Median line
-          svgContent += `<line x1="${xMed}" y1="${rowY + 1}" x2="${xMed}" y2="${rowY + ROW_H - 1}" stroke="${color}" stroke-width="2"/>`;
-          // Mean dot
-          svgContent += `<circle cx="${xMean}" cy="${cy}" r="2.5" fill="${color}" opacity="0.8"/>`;
+            // Draw Violin Curve
+            let pathD = '';
+            for(let i=0; i<=steps; i++) {
+                const pt = densities[i];
+                const pxX = cx + (pt.d / maxDensity) * (BOX_W / 2);
+                const pxY = yPx(pt.v);
+                pathD += i === 0 ? `M ${pxX} ${pxY} ` : `L ${pxX} ${pxY} `;
+            }
+            for(let i=steps; i>=0; i--) {
+                const pt = densities[i];
+                const pxX = cx - (pt.d / maxDensity) * (BOX_W / 2);
+                const pxY = yPx(pt.v);
+                pathD += `L ${pxX} ${pxY} `;
+            }
+            pathD += 'Z';
+            svgContent += `<path d="${pathD}" fill="${tc.bg}" fill-opacity="0.15" stroke="${tc.bg}" stroke-width="1.5" />`;
+
+            // Draw Solid Scatter Dots
+            d.times.forEach(t => {
+                const py = yPx(t);
+                const jitter = (Math.random() - 0.5) * (BOX_W * 0.35);
+                svgContent += `<circle cx="${cx + jitter}" cy="${py}" r="2.5" fill="${tc.bg}" opacity="0.85"/>`;
+            });
+
+            // Draw Boxplot Core
+            const iqrW = 8;
+            svgContent += `<rect x="${cx - iqrW/2}" y="${yPx(d.q3)}" width="${iqrW}" height="${yPx(d.q1) - yPx(d.q3)}" fill="${tc.bg}" stroke="${tc.bg}" stroke-width="1"/>`;
+            svgContent += `<circle cx="${cx}" cy="${yPx(d.median)}" r="3.5" fill="var(--bg)" stroke="${tc.bg}" stroke-width="1.5"/>`;
+
+            // Draw Driver Badge Label
+            const acronym = d.name_acronym || d.last_name.substring(0,3).toUpperCase();
+            const badgeY = svgHeight - BOTTOM_PAD + 20;
+            const badgeW = 60, badgeH = 24;
+
+            let tInfo = TEAM_INFO[d.team_name];
+            if (!tInfo) {
+                for (const [k, v] of Object.entries(TEAM_INFO)) {
+                    if (d.team_name && (d.team_name.includes(k) || k.includes(d.team_name))) { tInfo = v; break; }
+                }
+            }
+            let svgLogoHtml = '';
+            if (tInfo && tInfo.logo) {
+                const keepOriginalColor = d.team_name === 'Ferrari' || d.team_name === 'Red Bull Racing';
+                let filterCss = '';
+                if (!keepOriginalColor) {
+                    filterCss = tc.text === '#fff' ? 'filter: invert(1) brightness(2);' : 'filter: brightness(0);';
+                }
+                svgLogoHtml = `<image href="${tInfo.logo}" x="${cx - badgeW/2 + 4}" y="${badgeY + 6}" height="12" width="16" preserveAspectRatio="xMidYMid meet" style="${filterCss}" pointer-events="none" />`;
+            }
+
+            svgContent += `<rect x="${cx - badgeW/2}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="3" fill="${tc.bg}" />`;
+            svgContent += svgLogoHtml;
+            svgContent += `<text x="${cx + 8}" y="${badgeY + 16}" text-anchor="middle" fill="${tc.text}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">${acronym}</text>`;
+
+            // Text: Average & Gap
+            svgContent += `<text x="${cx}" y="${badgeY + 40}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="12" font-weight="700">Avg: ${fmtLapTime(d.mean)}</text>`;
+
+            const gap = d.mean - bestMean;
+            const gapText = gap === 0 ? 'Fastest' : `+${gap.toFixed(3)}s`;
+            const gapColor = gap === 0 ? '#c87eff' : tickColor;
+            svgContent += `<text x="${cx}" y="${badgeY + 56}" text-anchor="middle" fill="${gapColor}" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="600">${gapText}</text>`;
         });
-      });
 
-     // NEW: Enlarged Legend, shifted up to fit nicely over the empty space
-     // THE FIX: Legend pinned to the absolute top to avoid overlap
-      let legendX = svgViewW - RIGHT_PAD;
-      [...usedCompounds].reverse().forEach(c => {
-        const color = c === 'HARD' ? HARD_COLOR : (COMPOUND_COLORS[c] || '#888');
-        const shortName = c.substring(0,3);
-        svgContent += `<circle cx="${legendX - 28}" cy="16" r="6" fill="${color}" ${c === 'HARD' ? `stroke="${axisTextColor}" stroke-width="0.5"` : ''}/>`;
-        svgContent += `<text x="${legendX - 16}" y="21" text-anchor="start" fill="${axisTextColor}" font-family="Barlow Condensed,sans-serif" font-size="14" font-weight="700">${shortName}</text>`;
-        legendX -= 70;
-      });
+        // The Brush Rect for Dragging
+        svgContent += `<rect id="brush-${containerId}" y="${TOP_PAD}" height="${CHART_H}" fill="rgba(255,255,255,0.2)" stroke="#fff" stroke-dasharray="4" style="display:none;" pointer-events="none" />`;
 
-      container.innerHTML = `
-        <div style="padding: 1rem 0;">
-          <div style="background:${surfaceColor}; border:1px solid ${borderColor}; border-radius:4px; overflow:hidden;">
-            <svg viewBox="0 0 ${svgViewW} ${totalH}" width="100%" height="${totalH}" style="display:block;">
-              ${svgContent}
-            </svg>
-          </div>
-        </div>`;
+        const resetBtnHtml = currentDrivers.length !== validDrivers.length 
+            ? `<button id="btn-reset-${containerId}" class="theme-toggle" style="position:absolute; top: 10px; right: 10px; z-index: 10; padding: 0.4rem 1rem;">Reset Zoom</button>`
+            : '';
 
-    // ─────────────────────────────────────────────────────────────
-    // DRIVER-SPECIFIC VIEW: one chart, compounds side by side on X axis
-    // ─────────────────────────────────────────────────────────────
-    } else {
-      const dn = driverNumber;
-      const driver = orderedDriversList.find(d => d.driver_number === dn);
+        container.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <div class="standings-title">Clean Racing Pace</div>
+                <div style="font-size:0.75rem; color:var(--text-dim); font-family:'Barlow Condensed', sans-serif; text-transform:uppercase; letter-spacing:0.05em;">Drag across chart to zoom into specific drivers</div>
+            </div>
+            <div style="position:relative; background:${surfaceColor}; border:1px solid ${borderColor}; border-radius:4px; overflow:hidden;">
+                ${resetBtnHtml}
+                <div style="width:100%;">
+                    <svg id="svg-${containerId}" viewBox="0 0 ${svgViewW} ${svgHeight}" width="100%" height="auto" style="display:block; cursor:crosshair; min-height:400px; max-height:600px;">
+                        ${svgContent}
+                    </svg>
+                </div>
+            </div>
+        `;
 
-      const BOX_W = 56;
-      const BOX_GAP = 32;
-      const LEFT_PAD = 72;
-      const RIGHT_PAD = 20;
-      const TOP_PAD = 20;
-      const BOTTOM_PAD = 32;
-      const CHART_H = 320;
+        // Attach Interactive Drag-to-Zoom Logic
+        const svgEl = document.getElementById(`svg-${containerId}`);
+        const brushEl = document.getElementById(`brush-${containerId}`);
+        const resetBtn = document.getElementById(`btn-reset-${containerId}`);
 
-      const svgWidth = LEFT_PAD + usedCompounds.length * (BOX_W + BOX_GAP) + RIGHT_PAD;
-      const svgHeight = CHART_H + TOP_PAD + BOTTOM_PAD;
+        if (resetBtn) {
+            resetBtn.onclick = () => {
+                currentDrivers = [...validDrivers];
+                drawChart();
+            };
+        }
 
-      function yPx(val) {
-        return TOP_PAD + (1 - (val - xMin) / (xMax - xMin)) * CHART_H;
-      }
+        if (svgEl) {
+            const getSVGX = (e) => {
+                const pt = svgEl.createSVGPoint();
+                pt.x = e.clientX;
+                pt.y = e.clientY;
+                return pt.matrixTransform(svgEl.getScreenCTM().inverse()).x;
+            };
 
-      let svgContent = '';
+            svgEl.onmousedown = (e) => {
+                isDragging = true;
+                startX = getSVGX(e);
+                brushEl.setAttribute('x', startX);
+                brushEl.setAttribute('width', 0);
+                brushEl.style.display = 'block';
+            };
 
-      // Horizontal grid lines
-      const numTicks = 6;
-      for (let i = 0; i <= numTicks; i++) {
-        const val = xMin + (i / numTicks) * (xMax - xMin);
-        const y = yPx(val);
-        svgContent += `<line x1="${LEFT_PAD}" y1="${y}" x2="${svgWidth - RIGHT_PAD}" y2="${y}" stroke="${gridColor}" stroke-width="1"/>`;
-        svgContent += `<text x="${LEFT_PAD - 6}" y="${y + 4}" text-anchor="end" fill="${textColor}" font-family="Barlow Condensed,sans-serif" font-size="11">${fmtLapTime(val)}</text>`;
-      }
+            svgEl.onmousemove = (e) => {
+                if (!isDragging) return;
+                const currentX = getSVGX(e);
+                brushEl.setAttribute('x', Math.min(startX, currentX));
+                brushEl.setAttribute('width', Math.abs(currentX - startX));
+            };
 
-      usedCompounds.forEach((compound, ci) => {
-        const times = driverData[dn]?.[compound] || [];
-        const s = boxStats(times);
-        const color = compound === 'HARD' ? HARD_COLOR : (COMPOUND_COLORS[compound] || '#888');
-        const cx = LEFT_PAD + ci * (BOX_W + BOX_GAP) + BOX_W / 2 + BOX_GAP / 2;
-        const bLeft = cx - BOX_W / 2;
+            const finishDrag = (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                brushEl.style.display = 'none';
+                const endX = getSVGX(e);
+                const minX = Math.min(startX, endX);
+                const maxX = Math.max(startX, endX);
 
-        // Compound label below
-        svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 16}" text-anchor="middle" fill="${color}" font-family="Barlow Condensed,sans-serif" font-size="12" font-weight="700">${compound}</text>`;
-        if (times.length > 0) svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 28}" text-anchor="middle" fill="${textColor}" font-family="Barlow Condensed,sans-serif" font-size="9">${times.length} lap${times.length !== 1 ? 's' : ''}</text>`;
+                if (maxX - minX > 30) {
+                    const selected = currentDrivers.filter((_, i) => {
+                        const cx = LEFT_PAD + (i * step) + (step / 2);
+                        return cx >= minX && cx <= maxX;
+                    });
+                    if (selected.length > 0 && selected.length < currentDrivers.length) {
+                        currentDrivers = selected;
+                        drawChart();
+                    }
+                }
+            };
 
-        if (!s) return;
+            svgEl.onmouseup = finishDrag;
+            svgEl.onmouseleave = finishDrag;
+        }
+    };
 
-        const yQ1 = yPx(s.q1), yQ3 = yPx(s.q3), yMed = yPx(s.median);
-        const yWMin = yPx(s.min), yWMax = yPx(s.max), yMean = yPx(s.mean);
-        const capW = BOX_W * 0.3;
-
-        // Whiskers
-        svgContent += `<line x1="${cx}" y1="${yWMin}" x2="${cx}" y2="${yQ1}" stroke="${color}" stroke-width="1.5" opacity="0.55"/>`;
-        svgContent += `<line x1="${cx}" y1="${yQ3}" x2="${cx}" y2="${yWMax}" stroke="${color}" stroke-width="1.5" opacity="0.55"/>`;
-        // Caps
-        svgContent += `<line x1="${cx - capW}" y1="${yWMin}" x2="${cx + capW}" y2="${yWMin}" stroke="${color}" stroke-width="1.5" opacity="0.55"/>`;
-        svgContent += `<line x1="${cx - capW}" y1="${yWMax}" x2="${cx + capW}" y2="${yWMax}" stroke="${color}" stroke-width="1.5" opacity="0.55"/>`;
-        // IQR box
-        svgContent += `<rect x="${bLeft}" y="${yQ3}" width="${BOX_W}" height="${yQ1 - yQ3}" fill="${color}" fill-opacity="0.2" stroke="${color}" stroke-width="1.5" rx="3"/>`;
-        // Median
-        svgContent += `<line x1="${bLeft}" y1="${yMed}" x2="${bLeft + BOX_W}" y2="${yMed}" stroke="${color}" stroke-width="2.5"/>`;
-        // Mean
-        svgContent += `<circle cx="${cx}" cy="${yMean}" r="3.5" fill="${color}" opacity="0.75"/>`;
-      });
-
-      container.innerHTML = `
-        <div style="padding: 1rem 0;">
-          <div style="display:flex; gap:1.5rem; margin-bottom:0.75rem; font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; color:var(--text-dim);">
-            <span>── Median &nbsp; ● Mean &nbsp; □ IQR &nbsp; ╌ Min/Max</span>
-          </div>
-          <div style="background:${surfaceColor}; border:1px solid ${borderColor}; border-radius:4px; overflow:hidden;">
-            <svg width="${svgWidth}" height="${svgHeight}" style="display:block;">
-              ${svgContent}
-            </svg>
-          </div>
-        </div>`;
-    }
+    drawChart();
 
   } catch (e) {
-    container.innerHTML = `<div class="error-msg">Could not load lap time data. ${e.message}</div>`;
+    console.error(e);
+    container.innerHTML = `<div class="error-msg">Could not load pace data. ${e.message}</div>`;
   }
+}
+
+async function renderChampionshipBattle(allYearSessions, sortedDrivers, sortedTeams, driverInfoMap) {
+    const champArea = document.getElementById('season-championship-battle-area');
+    if (!champArea) return;
+
+    // Filter to only include actual race sessions that have finished
+    const raceSessions = allYearSessions.filter(s => s.session_name.toLowerCase() === 'race');
+    const pastRaces = raceSessions.filter(s => new Date(s.date_start) < NOW).sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+
+    if (pastRaces.length === 0) {
+        champArea.innerHTML = `<div style="padding:2rem 1rem; text-align:center; color:var(--text-dim);">Not enough data for championship battle yet.</div>`;
+        return;
+    }
+
+    champArea.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing Championship Battle...</div>`;
+
+    try {
+        // THE FIX: We only fetch the reliable Driver standings now!
+        const dTimelines = await Promise.all(pastRaces.map(r => fetchJSON(`${BASE}/championship_drivers?session_key=${r.session_key}`).catch(()=>[])));
+
+        const labels = [];
+        const driverGaps = {};
+        const teamGaps = {};
+
+        // Map drivers to their current teams so we can calculate Constructor points mathematically
+        const teamDriverMap = {};
+        sortedTeams.forEach(t => teamDriverMap[t.team_name] = []);
+        sortedDrivers.forEach(d => {
+            const info = driverInfoMap[d.driver_number] || {};
+            const tName = info.team_name;
+            if (tName) {
+                const matched = sortedTeams.find(st => st.team_name === tName || st.team_name.includes(tName) || tName.includes(st.team_name));
+                if (matched) teamDriverMap[matched.team_name].push(d.driver_number);
+            }
+        });
+
+        sortedDrivers.forEach(d => driverGaps[d.driver_number] = []);
+        sortedTeams.forEach(t => teamGaps[t.team_name] = []);
+
+        pastRaces.forEach((r, i) => {
+            const meeting = allMeetings.find(m => m.meeting_key === r.meeting_key);
+            labels.push(meeting ? meeting.circuit_short_name : `R${i+1}`);
+
+            const dData = dTimelines[i];
+            if (dData && dData.length > 0) {
+                // 1. Calculate Driver Gaps
+                const maxDriverPts = Math.max(...dData.map(d => d.points_current || 0));
+                sortedDrivers.forEach(driver => {
+                    const d = dData.find(x => x.driver_number === driver.driver_number);
+                    driverGaps[driver.driver_number].push(d ? maxDriverPts - (d.points_current || 0) : maxDriverPts);
+                });
+
+                // 2. THE FIX: Mathematically Calculate Team Points by summing their drivers!
+                const roundTeamPts = {};
+                sortedTeams.forEach(team => {
+                    let tPts = 0;
+                    const driversForTeam = teamDriverMap[team.team_name] || [];
+                    driversForTeam.forEach(dn => {
+                        const dObj = dData.find(x => x.driver_number === dn);
+                        if (dObj) tPts += (dObj.points_current || 0);
+                    });
+                    roundTeamPts[team.team_name] = tPts;
+                });
+
+                // 3. Calculate Team Gaps based on our calculated points
+                const maxTeamPts = Math.max(...Object.values(roundTeamPts), 0);
+                sortedTeams.forEach(team => {
+                    const pts = roundTeamPts[team.team_name] || 0;
+                    teamGaps[team.team_name].push(maxTeamPts - pts);
+                });
+
+            } else {
+                sortedDrivers.forEach(driver => driverGaps[driver.driver_number].push(null));
+                sortedTeams.forEach(team => teamGaps[team.team_name].push(null));
+            }
+        });
+
+        // --- CLINCH MATH LOGIC ---
+        const futureMeetings = allMeetings.filter(m => !m.is_testing && new Date(m.date_end) >= NOW);
+        const getMeetingMax = (m) => {
+            const hasSprint = allYearSessions.some(s => s.meeting_key === m.meeting_key && s.session_name.toLowerCase().includes('sprint') && !s.session_name.toLowerCase().includes('qualifying') && !s.session_name.toLowerCase().includes('shoot'));
+            return { d: hasSprint ? 34 : 26, t: hasSprint ? 59 : 44 }; 
+        };
+
+        const driverLeader = sortedDrivers[0];
+        const driver2nd = sortedDrivers.length > 1 ? sortedDrivers[1] : null;
+        let dGap = driverLeader && driver2nd ? driverLeader.points_current - driver2nd.points_current : 0;
+        let dClinchRound = "Not Possible Yet";
+
+        if (driverLeader && driver2nd) {
+            const dRemaining = futureMeetings.map(m => getMeetingMax(m).d);
+            let currentSimGap = dGap;
+            for (let i = 0; i < dRemaining.length; i++) {
+                currentSimGap += dRemaining[i]; 
+                const left = dRemaining.slice(i+1).reduce((a,b)=>a+b, 0); 
+                if (currentSimGap > left) {
+                    dClinchRound = `Race ${futureMeetings[i].race_week} (${allMeetings.find(m => m.meeting_key === futureMeetings[i].meeting_key)?.circuit_short_name})`;
+                    break;
+                }
+            }
+        }
+
+        const teamLeader = sortedTeams[0];
+        const team2nd = sortedTeams.length > 1 ? sortedTeams[1] : null;
+        let tGap = teamLeader && team2nd ? teamLeader.points_current - team2nd.points_current : 0;
+        let tClinchRound = "Not Possible Yet";
+
+        if (teamLeader && team2nd) {
+            const tRemaining = futureMeetings.map(m => getMeetingMax(m).t);
+            let currentSimGap = tGap;
+            for (let i = 0; i < tRemaining.length; i++) {
+                currentSimGap += tRemaining[i];
+                const left = tRemaining.slice(i+1).reduce((a,b)=>a+b, 0);
+                if (currentSimGap > left) {
+                    tClinchRound = `Race ${futureMeetings[i].race_week} (${allMeetings.find(m => m.meeting_key === futureMeetings[i].meeting_key)?.circuit_short_name})`;
+                    break;
+                }
+            }
+        }
+
+        // --- CUSTOM HTML LEGEND BUILDERS ---
+        const teamDriverCounts = {};
+        let dLegendHtml = `<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.75rem; margin-top:1.5rem;">`;
+        
+        sortedDrivers.forEach(d => {
+            const info = driverInfoMap[d.driver_number] || {};
+            const tName = info.team_name || 'Unknown';
+            
+            if (!teamDriverCounts[tName]) teamDriverCounts[tName] = 0;
+            teamDriverCounts[tName]++;
+            const isSecondDriver = teamDriverCounts[tName] > 1;
+            
+            const tc = teamColor(tName);
+            const acronym = info.name_acronym || info.last_name || `#${d.driver_number}`;
+            
+            const tileBg = isSecondDriver ? 'transparent' : tc.bg;
+            const tileBorder = isSecondDriver ? `2px dashed ${tc.bg}` : `2px solid ${tc.bg}`;
+            const tileText = isSecondDriver ? 'var(--text)' : tc.text;
+            const logoColor = isSecondDriver ? null : tc.text; 
+            
+            dLegendHtml += `
+                <div class="driver-num-badge" 
+                     onclick="openDriverProfile(${d.driver_number}); setTimeout(() => switchProfileSubTab('championship'), 50);"
+                     onmouseenter="highlightChampLine('driver', ${d.driver_number})"
+                     onmouseleave="resetChampLines('driver')"
+                     style="background:${tileBg}; border:${tileBorder}; color:${tileText}; width:68px; flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; box-sizing: border-box; transition: transform 0.15s;" 
+                     onmouseover="this.style.transform='translateY(-2px)';" 
+                     onmouseout="this.style.transform='translateY(0)';"
+                     title="${info.full_name || acronym}">
+                    ${getTeamLogoHtml(tName, '10px', logoColor)}
+                    <span style="font-size:0.85rem; letter-spacing:0.05em; font-weight:700;">${acronym}</span>
+                </div>
+            `;
+        });
+        dLegendHtml += `</div>`;
+
+        let tLegendHtml = `<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.75rem; margin-top:1.5rem;">`;
+        sortedTeams.forEach(t => {
+            const tc = teamColor(t.team_name);
+            const safeTeamName = t.team_name.replace(/'/g, "\\'"); // Escape quotes just in case
+            
+            tLegendHtml += `
+                <div class="driver-num-badge" 
+                     onclick="openTeamProfile('${safeTeamName}'); setTimeout(() => switchTeamSubTab('championship'), 50);"
+                     onmouseenter="highlightChampLine('team', '${safeTeamName}')"
+                     onmouseleave="resetChampLines('team')"
+                     style="background:${tc.bg}; border:2px solid ${tc.bg}; width:48px; height:26px; display:flex; align-items:center; justify-content:center; cursor:pointer; box-sizing: border-box; transition: transform 0.15s;" 
+                     onmouseover="this.style.transform='translateY(-2px)';" 
+                     onmouseout="this.style.transform='translateY(0)';"
+                     title="${t.team_name}">
+                    ${getTeamLogoHtml(t.team_name, '14px', tc.text)}
+                </div>
+            `;
+        });
+        tLegendHtml += `</div>`;
+
+        // --- RENDER HTML & CHARTS ---
+        champArea.style.padding = '0';
+        champArea.style.textAlign = 'left';
+
+        champArea.innerHTML = `
+            <div class="standings-title" style="margin-top: 1rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; padding: 0 0.5rem;">
+                <span>Gap to Championship Leader (Driver)</span>
+                <span style="color:var(--text-muted); text-transform:none;">Earliest Theoretical Clinch: <span style="color:var(--text); font-weight:900; text-transform:uppercase;">${dClinchRound}</span></span>
+            </div>
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:2.5rem; width: 100%;">
+                <div style="height: 400px; width: 100%; position: relative;"><canvas id="champ-driver-chart"></canvas></div>
+                ${dLegendHtml}
+            </div>
+
+            <div class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; padding: 0 0.5rem;">
+                <span>Gap to Championship Leader (Constructor)</span>
+                <span style="color:var(--text-muted); text-transform:none;">Earliest Theoretical Clinch: <span style="color:var(--text); font-weight:900; text-transform:uppercase;">${tClinchRound}</span></span>
+            </div>
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:1rem; width: 100%;">
+                <div style="height: 400px; width: 100%; position: relative;"><canvas id="champ-team-chart"></canvas></div>
+                ${tLegendHtml}
+            </div>
+        `;
+
+        const isLight = document.body.dataset.theme === 'light';
+        const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
+        const tickColor = isLight ? '#666' : '#aaa';
+
+        const renderTeamCounts = {};
+
+        const dDatasets = sortedDrivers.map((d, i) => {
+            const info = driverInfoMap[d.driver_number] || {};
+            const tName = info.team_name || 'Unknown';
+            
+            if (!renderTeamCounts[tName]) renderTeamCounts[tName] = 0;
+            renderTeamCounts[tName]++;
+            const isSecondDriver = renderTeamCounts[tName] > 1;
+
+            const tc = teamColor(tName);
+            const isLeader = i === 0;
+            return {
+                label: info.name_acronym || info.last_name || `#${d.driver_number}`,
+                data: driverGaps[d.driver_number],
+                borderColor: tc.bg,
+                backgroundColor: tc.bg,
+                borderWidth: isLeader ? 4 : 2,
+                borderDash: isSecondDriver ? [5, 5] : [], 
+                pointRadius: 4,
+                pointBackgroundColor: tc.bg,
+                fill: false,
+                tension: 0.2,
+                spanGaps: true,
+                order: isLeader ? 0 : 1,
+                // NEW: Custom properties used for resetting styles after hover!
+                _driverNum: d.driver_number,
+                _origColor: tc.bg,
+                _origWidth: isLeader ? 4 : 2,
+                _origOrder: isLeader ? 0 : 1,
+                _origDash: isSecondDriver ? [5, 5] : []
+            };
+        });
+
+        const tDatasets = sortedTeams.map((t, i) => {
+            const tc = teamColor(t.team_name);
+            const isLeader = i === 0;
+            return {
+                label: t.team_name,
+                data: teamGaps[t.team_name],
+                borderColor: tc.bg,
+                backgroundColor: tc.bg,
+                borderWidth: isLeader ? 4 : 2,
+                pointRadius: 4,
+                pointBackgroundColor: tc.bg,
+                fill: false,
+                tension: 0.2,
+                spanGaps: true,
+                order: isLeader ? 0 : 1,
+                // NEW: Custom properties used for resetting styles after hover!
+                _teamName: t.team_name,
+                _origColor: tc.bg,
+                _origWidth: isLeader ? 4 : 2,
+                _origOrder: isLeader ? 0 : 1
+            };
+        });
+
+        const baseChartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            // THE FIX: Changed from 'index' to 'nearest' on the 'xy' axis. 
+            // Now elements[0] will correctly identify the exact line you are closest to!
+            interaction: { mode: 'nearest', axis: 'xy', intersect: false },
+            plugins: {
+                legend: { display: false }, 
+                tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
+            },
+            scales: {
+                x: { ticks: { color: tickColor, font: { family: 'Barlow Condensed', weight: 600 } }, grid: { color: gridColor } },
+                y: { 
+                    reverse: true, 
+                    beginAtZero: true,
+                    title: { display: true, text: 'Points Behind Leader', color: tickColor, font: { family: 'Barlow Condensed' } }, 
+                    grid: { color: gridColor }, 
+                    ticks: { color: tickColor, font: { family: 'Barlow Condensed' } } 
+                }
+            }
+        };
+
+        // --- NEW: Interactive Highlight Global Methods ---
+        window.highlightChampLine = (type, id) => {
+            const chart = type === 'driver' ? window.champDriverChartInst : window.champTeamChartInst;
+            if (!chart) return;
+            
+            chart.data.datasets.forEach(ds => {
+                const isTarget = type === 'driver' ? ds._driverNum === id : ds._teamName === id;
+                if (isTarget) {
+                    ds.borderColor = convertHexToRGBA(ds._origColor, 1.0);
+                    ds.borderWidth = 5;
+                    ds.order = 0; // Bring to front
+                } else {
+                    ds.borderColor = convertHexToRGBA(ds._origColor, isLight ? 0.1 : 0.05);
+                    ds.borderWidth = 1.5;
+                    ds.order = 1;
+                }
+            });
+            chart.update('none'); // Update without animation so it feels incredibly snappy
+        };
+
+        window.resetChampLines = (type) => {
+    const chart = type === 'driver' ? window.champDriverChartInst : window.champTeamChartInst;
+    if (!chart) return;
+    
+    chart.data.datasets.forEach(ds => {
+        ds.borderColor = ds._origColor;
+        ds.borderWidth = ds._origWidth;
+        ds.order = ds._origOrder;
+        ds.borderDash = ds._origDash || [];
+    });
+    chart.update('none');
+};
+
+// Attach guaranteed mouseleave listeners directly to canvas elements
+setTimeout(() => {
+    const dCanvas = document.getElementById('champ-driver-chart');
+    const tCanvas = document.getElementById('champ-team-chart');
+    if (dCanvas) dCanvas.onmouseleave = () => resetChampLines('driver');
+    if (tCanvas) tCanvas.onmouseleave = () => resetChampLines('team');
+}, 100);
+
+        // --- NEW: Inject Chart.js Native Hover Support ---
+        const driverChartOptions = {
+            ...baseChartOptions,
+            onHover: (e, elements, chart) => {
+                if (elements && elements.length) {
+                    highlightChampLine('driver', chart.data.datasets[elements[0].datasetIndex]._driverNum);
+                }
+            }
+        };
+
+        const teamChartOptions = {
+            ...baseChartOptions,
+            onHover: (e, elements, chart) => {
+                if (elements && elements.length) {
+                    highlightChampLine('team', chart.data.datasets[elements[0].datasetIndex]._teamName);
+                }
+            }
+        };
+
+        if (window.champDriverChartInst) window.champDriverChartInst.destroy();
+        window.champDriverChartInst = new Chart(document.getElementById('champ-driver-chart').getContext('2d'), {
+            type: 'line', data: { labels, datasets: dDatasets }, options: driverChartOptions
+        });
+
+        if (window.champTeamChartInst) window.champTeamChartInst.destroy();
+        window.champTeamChartInst = new Chart(document.getElementById('champ-team-chart').getContext('2d'), {
+            type: 'line', data: { labels, datasets: tDatasets }, options: teamChartOptions
+        });
+
+    } catch (e) {
+        console.error(e);
+        champArea.innerHTML = `<div class="error-msg">Could not load championship timeline: ${e.message}</div>`;
+    }
 }
 
 async function loadSeason() {
@@ -1486,6 +1890,7 @@ async function loadStandings() {
   if (pastMeetings.length === 0) {
     document.getElementById('standings-drivers').innerHTML = `<div class="standings-header"><span class="standings-title">Drivers</span></div><div style="padding:1rem;font-size:0.8rem;color:var(--text-dim);text-align:center">Season not started</div>`;
     document.getElementById('standings-constructors').innerHTML = `<div class="standings-header"><span class="standings-title">Constructors</span></div><div style="padding:1rem;font-size:0.8rem;color:var(--text-dim);text-align:center">Season not started</div>`;
+    document.getElementById('season-summary-leaders').innerHTML = `<div style="grid-column: 1/-1; padding: 2rem; color:var(--text-dim); text-align:center;">Season not started</div>`;
     return;
   }
   try {
@@ -1565,69 +1970,167 @@ async function loadStandings() {
             <div class="s-pts">${t.points_current}<span class="pts-label">pts</span></div>
           </div>`;
       }).join('')}`;
+
+      // --- NEW: Populate Season Summary Top Tiles ---
+    const driverLeader = sortedDrivers[0];
+    const teamLeader = sortedTeams[0];
+    const summaryContainer = document.getElementById('season-summary-leaders');
+
+    if (summaryContainer && driverLeader && teamLeader) {
+        // Driver Leader Tile
+        const dInfo = driverInfoMap[driverLeader.driver_number] || {};
+        const dTc = teamColor(dInfo.team_name);
+        const acronym = dInfo.name_acronym || '';
+        const countryCode = dInfo.country_code || DRIVER_COUNTRY_FALLBACK[acronym] || '';
+        const iso2 = countryToIso2[countryCode] || '';
+        const nationalityHtml = iso2 ? `<img src="https://flagcdn.com/w40/${iso2}.png" style="height:14px; width:22px; object-fit:cover; border-radius:1px; border:1px solid rgba(0,0,0,0.2);" alt="${countryCode}">` : '';
+
+
+        // Driver Leader Tile (Badge on left, Name & Points on RIGHT)
+        // Driver Leader Tile (Badge on left, Name & Points on RIGHT)
+        const dTile = `
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1.25rem; cursor:pointer; transition: transform 0.15s, border-color 0.15s;"
+               onmouseover="this.style.borderColor='var(--border-hover)'; this.style.transform='translateY(-2px)';"
+               onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';"
+               onclick="openDriverProfile(${driverLeader.driver_number})">
+             <div style="font-size:0.95rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem; font-family:'Barlow Condensed', sans-serif; text-align:center;">Championship Leader</div>
+             <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+               
+               <div class="driver-num-badge" style="background:${dTc.bg}; color:${dTc.text}; width:auto; min-width:65px; height:36px; padding:0 10px; display:flex; align-items:center; gap:8px; border-radius:3px; justify-content: center; flex-shrink:0;">
+                 ${nationalityHtml}
+                 <span style="font-size:1.2rem; line-height:1; font-weight:700;">${driverLeader.driver_number}</span>
+               </div>
+
+               <div style="display:flex; align-items:center; gap:1.25rem; text-align:right; justify-content:flex-end; min-width:0;">
+                 <div style="font-family:'Barlow Condensed', sans-serif; font-size:1.4rem; font-weight:700; text-transform:uppercase; line-height:1.1; text-align:right;">${dInfo.full_name || dInfo.last_name}</div>
+                 <div style="display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0;">
+                   <div style="font-family:'Barlow Condensed', sans-serif; font-size:2.2rem; font-weight:900; line-height:1;">${driverLeader.points_current}</div>
+                   <div style="font-size:0.8rem; color:var(--text-muted); font-weight:700; font-family:'Barlow Condensed', sans-serif; margin-top:2px;">PTS</div>
+                 </div>
+               </div>
+               
+             </div>
+          </div>
+        `;
+
+        // Team Leader Tile
+        let tInfo = TEAM_INFO[teamLeader.team_name];
+        if (!tInfo) {
+            for (const [k, v] of Object.entries(TEAM_INFO)) {
+                if (teamLeader.team_name.includes(k) || k.includes(teamLeader.team_name)) { tInfo = v; break; }
+            }
+        }
+        const teamFullName = tInfo ? tInfo.full : teamLeader.team_name;
+        const tLogoHtml = getTeamLogoHtml(teamLeader.team_name, '32px');
+
+        // Constructor Leader Tile (Points on the LEFT, text mirrored)
+        const tTile = `
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1.25rem; cursor:pointer; transition: transform 0.15s, border-color 0.15s;"
+               onmouseover="this.style.borderColor='var(--border-hover)'; this.style.transform='translateY(-2px)';"
+               onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';"
+               onclick="openTeamProfile('${teamLeader.team_name}')">
+             <div style="font-size:0.95rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem; font-family:'Barlow Condensed', sans-serif; text-align:center;">Constructors Leader</div>
+             <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+               <div style="display:flex; flex-direction:column; align-items:flex-start; flex-shrink:0;">
+                 <div style="font-family:'Barlow Condensed', sans-serif; font-size:2.2rem; font-weight:900; line-height:1;">${teamLeader.points_current}</div>
+                 <div style="font-size:0.8rem; color:var(--text-muted); font-weight:700; font-family:'Barlow Condensed', sans-serif; margin-top:2px;">PTS</div>
+               </div>
+               <div style="display:flex; align-items:center; gap:1.25rem; text-align:left; justify-content:flex-end; min-width:0;">
+                 <div style="font-family:'Barlow Condensed', sans-serif; font-size:1.4rem; font-weight:700; text-transform:uppercase; line-height:1.1;">${teamFullName}</div>
+                 <div style="width:48px; display:flex; justify-content:center; align-items:center; flex-shrink:0;">
+                   ${tLogoHtml || `<div style="font-size:1.5rem; color:var(--text-dim);">🏎️</div>`}
+                 </div>
+               </div>
+             </div>
+          </div>
+        `;
+
+        summaryContainer.innerHTML = dTile + tTile;
+    }
+    
+    // THE FIX: Fetch all the year's sessions first so the clinch math has the data it needs!
+    const allYearSessions = await fetchJSON(`${BASE}/sessions?year=${currentYear}`);
+    
+    // Fire off the timeline rendering after building the top tiles!
+    renderChampionshipBattle(allYearSessions, sortedDrivers, sortedTeams, driverInfoMap);
+
   } catch (e) {
+    console.error("Standings Error:", e); // Helpful to leave this in so errors aren't invisible!
     document.getElementById('standings-drivers').innerHTML = `<div class="standings-header"><span class="standings-title">Drivers</span></div><div style="padding:1rem;font-size:0.75rem;color:var(--text-dim);text-align:center">Unavailable</div>`;
     document.getElementById('standings-constructors').innerHTML = `<div class="standings-header"><span class="standings-title">Constructors</span></div><div style="padding:1rem;font-size:0.75rem;color:var(--text-dim);text-align:center">Unavailable</div>`;
   }
 }
 
 function renderSeason() {
-  const past = allMeetings.filter(m => new Date(m.date_end) < NOW);
-  const future = allMeetings.filter(m => new Date(m.date_end) >= NOW);
-  const next = future[0];
+  // Split the data into Races and Testing
+  const raceMeetings = allMeetings.filter(m => !m.is_testing);
+  const testMeetings = allMeetings.filter(m => m.is_testing);
 
-  document.getElementById('season-sub').textContent = `${past.length} events completed · ${future.length} remaining`;
-  const grid = document.getElementById('season-grid');
+  const pastRaces = raceMeetings.filter(m => new Date(m.date_end) < NOW);
+  const futureRaces = raceMeetings.filter(m => new Date(m.date_end) >= NOW);
+  const nextRace = futureRaces[0];
+
+  // Update subtitle to only count actual races
+  document.getElementById('season-sub').textContent = `${pastRaces.length} races completed · ${futureRaces.length} remaining`;
   
-  grid.innerHTML = allMeetings.map((m, i) => {
-    const isPast = new Date(m.date_end) < NOW;
-    const isNext = next && m.meeting_key === next.meeting_key;
-    let cls = isPast ? '' : isNext ? 'next-race' : 'future-race';
-    const onclick = (isPast || isNext) ? `onclick="selectMeeting(${m.meeting_key})"` : '';
+  // Helper to generate the card HTML to avoid duplicating code
+  const generateCards = (meetings, nextEvent) => {
+    if (meetings.length === 0) return `<div style="grid-column: 1/-1; padding: 2rem; color: var(--text-dim);">No events scheduled.</div>`;
     
-    const imgHtml = m.circuit_image
-      ? `<img src="${m.circuit_image}" alt="${m.circuit_short_name}" onerror="this.parentElement.innerHTML='<div class=\\'card-img-placeholder\\'>Circuit</div>'">`
-      : `<div class="card-img-placeholder">Circuit</div>`;
+    return meetings.map((m) => {
+      const isPast = new Date(m.date_end) < NOW;
+      const isNext = nextEvent && m.meeting_key === nextEvent.meeting_key;
+      let cls = isPast ? '' : isNext ? 'next-race' : 'future-race';
+      const onclick = (isPast || isNext) ? `onclick="selectMeeting(${m.meeting_key})"` : '';
       
-    // --- NEW: Use accurate Race Week labels ---
-    const roundLabel = m.is_testing ? 'Pre-Season Testing' : `Race Week ${m.race_week}`;
-    
-    // Grab the full sponsored name, strip "Formula 1", and strip the year from the end
-    let officialName = m.meeting_official_name || m.meeting_name;
-    officialName = officialName
-      .replace(/FORMULA 1/i, '')     // Removes "Formula 1" from the beginning
-      .trim()                        // Cleans up the leading space
-      .replace(/\s*\d{4}$/, '')      // Removes the 4-digit year from the very end
-      .trim();                       // Cleans up any trailing spaces left behind
-
-    // Build the Flag for the left side
-    const flagCode = getCountryCode(m.country_name);
-    const flagHtml = m.country_name ? `<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${flagCode}.svg" style="width: 28px; height: auto; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); flex-shrink: 0; margin-top: 4px;">` : '';
-    
-    return `
-      <div class="race-card ${cls}" ${onclick}>
-        ${isNext ? '<div class="next-badge">Next</div>' : ''}
-        <div class="card-accent-bar"></div>
-        <div class="card-img">${imgHtml}</div>
+      const imgHtml = m.circuit_image
+        ? `<img src="${m.circuit_image}" alt="${m.circuit_short_name}" onerror="this.parentElement.innerHTML='<div class=\\'card-img-placeholder\\'>Circuit</div>'">`
+        : `<div class="card-img-placeholder">Circuit</div>`;
         
-        <div class="card-body" style="display: flex; gap: 0.75rem; align-items: flex-start;">
-          ${flagHtml}
-          <div style="display: flex; flex-direction: column;">
-            <div class="card-round">${roundLabel}</div>
-            <div class="card-name" style="font-size: 1rem; line-height: 1.15; margin-bottom: 4px;">${officialName}</div>
-            <div class="card-date">${fmtDate(m.date_start)}</div>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
+      const roundLabel = m.is_testing ? 'Pre-Season Testing' : `Race ${m.race_week}`;
+      
+      let officialName = m.meeting_official_name || m.meeting_name;
+      officialName = officialName.replace(/FORMULA 1/i, '').trim().replace(/\s*\d{4}$/, '').trim();
 
-  // --- NEW: Populate Quick Select Dropdown with accurate prefixes ---
+      const flagCode = getCountryCode(m.country_name);
+      const flagHtml = m.country_name ? `<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${flagCode}.svg" style="width: 28px; height: auto; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); flex-shrink: 0; margin-top: 4px;">` : '';
+      
+      return `
+        <div class="race-card ${cls}" ${onclick}>
+          ${isNext ? '<div class="next-badge">Next</div>' : ''}
+          <div class="card-accent-bar"></div>
+          <div class="card-img">${imgHtml}</div>
+          <div class="card-body" style="display: flex; gap: 0.75rem; align-items: flex-start;">
+            ${flagHtml}
+            <div style="display: flex; flex-direction: column;">
+              <div class="card-round">${roundLabel}</div>
+              <div class="card-name" style="font-size: 1rem; line-height: 1.15; margin-bottom: 4px;">${officialName}</div>
+              <div class="card-date">${fmtDate(m.date_start)}</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  };
+
+  // Render the two separate grids
+  document.getElementById('season-grid').innerHTML = generateCards(raceMeetings, nextRace);
+  
+  const testGrid = document.getElementById('season-grid-testing');
+  if (testGrid) {
+    const nextTest = testMeetings.filter(m => new Date(m.date_end) >= NOW)[0];
+    testGrid.innerHTML = generateCards(testMeetings, nextTest);
+  }
+
+  // Populate Quick Select Dropdown
   const quickSelect = document.getElementById('quick-race-select');
   if (quickSelect) {
     let options = '';
+    const nextOverall = allMeetings.filter(m => new Date(m.date_end) >= NOW)[0];
+    
     allMeetings.forEach((m) => {
       const isPast = new Date(m.date_end) < NOW;
-      const isNext = next && m.meeting_key === next.meeting_key;
+      const isNext = nextOverall && m.meeting_key === nextOverall.meeting_key;
+      
       if (isPast || isNext) {
         const prefix = m.is_testing ? 'TEST' : `Race ${m.race_week}`;
         options += `<option value="${m.meeting_key}">${prefix} - ${m.meeting_name}</option>`;
@@ -1773,15 +2276,13 @@ async function selectSession(key, intendedSubTab = null) {
   
   if (isRace) {
     tabsHtml += `<button class="subtab-btn" id="subtab-btn-pit-stops" onclick="switchSubTab('pit-stops')">Pit Stops</button>`;
-    // THE FIX: Moved Lap Times here so it sits before Positions Gained/Lost
-    tabsHtml += `<button class="subtab-btn" id="subtab-btn-lap-times" onclick="switchSubTab('lap-times')">Lap Times</button>`;
+    tabsHtml += `<button class="subtab-btn" id="subtab-btn-lap-times" onclick="switchSubTab('lap-times')">Race Pace</button>`;
     tabsHtml += `<button class="subtab-btn" id="subtab-btn-lap-chart" onclick="switchSubTab('lap-chart')">Positions Gained/Lost</button>`;
   } else if (isQuali) {
-    tabsHtml += `<button class="subtab-btn" id="subtab-btn-lap-times" onclick="switchSubTab('lap-times')">Lap Times</button>`;
-    // NEW: Add the Track Dominance tab
+    // Removed the Race Pace tab here!
     tabsHtml += `<button class="subtab-btn" id="subtab-btn-track-dominance" onclick="switchSubTab('track-dominance')">Track Dominance</button>`;
   } else {
-    tabsHtml += `<button class="subtab-btn" id="subtab-btn-lap-times" onclick="switchSubTab('lap-times')">Lap Times</button>`;
+    tabsHtml += `<button class="subtab-btn" id="subtab-btn-lap-times" onclick="switchSubTab('lap-times')">Race Pace</button>`;
     tabsHtml += `<button class="subtab-btn" id="subtab-btn-run-plans" onclick="switchSubTab('run-plans')">Run Plans</button>`;
   }
   
@@ -2065,7 +2566,7 @@ const dnfStatHtml = isRace ? `<div class="stat"><div class="stat-label">DNF / DN
                   ${d.team_name || '—'}
               </div>
             </div>
-            ${pos <= 3 ? `<div style="display:flex; align-items:center;">${getTrophyHtml(pos, '32px', false)}</div>` : ''}
+            ${(isRace && pos <= 3) ? `<div style="display:flex; align-items:center;">${getTrophyHtml(pos, '32px', false)}</div>` : ''}
           </div>
           <div class="driver-timing">
             ${timingHtml}
@@ -2107,16 +2608,11 @@ const dnfStatHtml = isRace ? `<div class="stat"><div class="stat-label">DNF / DN
 async function viewDriverDetails(driverNumber) {
   currentDriverView = driverNumber; 
 
-  // --- 1. SESSION TAB PERSISTENCE ---
-  // Save the currently active session subtab (Results, Pit Stops, or Lap Chart)
-  // so we can correctly reload it when the user clicks 'Back'
   const activeSessionTab = document.querySelector('#subtabs-container .subtab-btn.active');
   const sessionTabId = activeSessionTab ? activeSessionTab.id.replace('subtab-btn-', '') : 'results';
   
   showView('view-driver-detail');   
   
-  // --- 2. QUICK SWITCHER DROPDOWNS & TABS ---
-  // A. Driver Switcher
   const switcher = document.getElementById('detail-driver-switcher');
   if (switcher && orderedDriversList.length > 0) {
     switcher.innerHTML = orderedDriversList.map(d => 
@@ -2126,7 +2622,6 @@ async function viewDriverDetails(driverNumber) {
     ).join('');
   }
 
-  // B. Meeting Switcher
   const meetingSwitcher = document.getElementById('detail-meeting-switcher');
   if (meetingSwitcher) {
     let options = '';
@@ -2142,7 +2637,6 @@ async function viewDriverDetails(driverNumber) {
     meetingSwitcher.innerHTML = options;
   }
 
-  // C. Session Tabs
   const sessionTabsContainer = document.getElementById('driver-detail-session-tabs');
   if (sessionTabsContainer && currentMeeting) {
     fetchJSON(`${BASE}/sessions?meeting_key=${currentMeeting.meeting_key}`).then(sessions => {
@@ -2155,18 +2649,14 @@ async function viewDriverDetails(driverNumber) {
     });
   }
 
-  // --- 3. DATA PERSISTENCE CHECK ---
   let driverObj = orderedDriversList.find(d => d.driver_number === driverNumber);
   if (!driverObj) {
-    // Fallback: Fetch the full list for this session if the global list is empty
     const sessionDrivers = await fetchJSON(`${BASE}/drivers?session_key=${currentSession.session_key}`);
     orderedDriversList = sessionDrivers;
     driverObj = orderedDriversList.find(d => d.driver_number === driverNumber);
   }
 
-  // Update consistent Athlete Badge header
   updateDriverHeader('detail-driver-title', driverObj);
-  // NEW: Make the location/session text a clickable link to the main Race Weekend page
   const subText = `${currentMeeting.location} &middot; ${getShortSessionName(currentSession.session_name)}`;
   document.getElementById('detail-driver-sub').innerHTML = `
     <span onclick="selectMeeting(${currentMeeting.meeting_key})" 
@@ -2177,16 +2667,12 @@ async function viewDriverDetails(driverNumber) {
     </span>
   `;
 
-  // Show/hide Positions Gained/Lost tab based on session type
   updateDriverSubTabsForSession();
 
-  // --- 4. AUTO-TAB SYNC ---
-  // Detects which sub-tab was open in the driver view and refreshes it
   const activeSubTab = document.querySelector('#driver-subtabs-container .subtab-btn.active');
   const activeTabId = activeSubTab ? activeSubTab.id.replace('driver-subtab-btn-', '') : 'tire-strategy';
   switchDriverSubTab(activeTabId);
 
-  // --- 5. BACK BUTTON LOGIC ---
   const backBtn = document.getElementById('driver-detail-back-btn');
   if (backBtn) {
     if (previousView === 'view-driver-profile') {
@@ -2194,7 +2680,6 @@ async function viewDriverDetails(driverNumber) {
       backBtn.onclick = () => showView('view-driver-profile');
     } else {
       backBtn.textContent = '← Back to Results';
-      // When going back, explicitly re-run switchSubTab to ensure the Lap Chart re-renders
       backBtn.onclick = () => {
         showView('view-drivers');
         switchSubTab(sessionTabId);
@@ -2202,13 +2687,32 @@ async function viewDriverDetails(driverNumber) {
     }
   }
 
-  // --- 6. DATA LOADING UI ---
-  const wrapper = document.getElementById('detail-stint-track').parentElement;
-  const titleElement = wrapper.previousElementSibling; 
+  // --- 6. UNIFIED DATA LOADING UI ---
+  const stratContainer = document.getElementById('driver-subtab-content-tire-strategy');
+  stratContainer.innerHTML = `
+    <div id="detail-strategy-title" class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+      <span>Pace Analysis <span id="sc-legend" style="display:none;"><span style="color:#ffcc00; margin-left:10px; font-weight:900;">█ SC</span> <span style="color:#ff6600; margin-left:5px; font-weight:900;">█ VSC</span></span></span>
+      <span id="detail-total-laps">Total Laps: --</span>
+    </div>
 
-  wrapper.innerHTML = `
-    <div id="detail-sc-track" style="position:relative; width:100%; height:12px; background:var(--surface2); border-radius:2px; overflow:hidden; margin-bottom:4px; display:none;"></div>
-    <div class="stint-track" id="detail-stint-track" style="height:28px;"><div class="spinner" style="margin:auto; width:16px; height:16px;"></div></div>
+    <div id="pace-analysis-container" style="position: relative; width: 100%;">
+      <div id="sc-master-overlay" style="position: absolute; top: 0; bottom: 0; left: 0; width: 100%; pointer-events: none; z-index: 15; transition: margin-left 0.3s, width 0.3s;"></div>
+
+      <div style="width: 100%; position: relative; z-index: 10; cursor: pointer;" onclick="toggleLapTimeChart()" title="Click to toggle telemetry">
+        <div class="stint-track" id="detail-stint-track" style="height: 28px; border-radius: 4px; overflow: hidden; position: relative; background: var(--surface2); transition: margin-left 0.3s, width 0.3s;">
+          <div class="spinner" style="margin:auto; width:16px; height:16px;"></div>
+        </div>
+      </div>
+
+      <div id="lapTimeChartWrapper" style="display: none; position: relative; height: 350px; width: 100%; margin-top: 0.5rem; z-index: 10;">
+        <canvas id="lapTimeChart"></canvas>
+      </div>
+    </div>
+
+    <div class="standings-title" style="margin-top: 3.5rem; margin-bottom: 0.5rem;">Tire Performance</div>
+    <div id="detail-tire-performance" style="width: 100%; position: relative;">
+       <div class="spinner" style="margin:auto; width:16px; height:16px;"></div>
+    </div>
   `;
   
   try {
@@ -2218,35 +2722,32 @@ async function viewDriverDetails(driverNumber) {
     ]);
 
     const totalLaps = laps.length > 0 ? laps[laps.length - 1].lap_number : 1;
+    const lapRange = Math.max(1, totalLaps - 1); 
     const scPeriods = await getSafetyCarPeriods(currentSession.session_key, laps);
     
-    // Inject the Legend & Total Laps
-    if (titleElement) {
-      let legendHtml = '';
-      if (scPeriods.length > 0) {
-        legendHtml = `<span style="color:#ffcc00; margin-left:10px; font-weight:900;">█ SC</span> <span style="color:#ff6600; margin-left:5px; font-weight:900;">█ VSC</span>`;
-      }
-      titleElement.style.display = 'flex';
-      titleElement.style.justifyContent = 'space-between';
-      titleElement.innerHTML = `<span>Race Strategy ${legendHtml}</span><span>Total Laps: ${totalLaps}</span>`;
+    document.getElementById('detail-total-laps').textContent = `Total Laps: ${totalLaps}`;
+    if (scPeriods.length > 0) {
+        document.getElementById('sc-legend').style.display = 'inline';
     }
 
-    // Safety Car Overlay
-    const scTrackContainer = document.getElementById('detail-sc-track');
+    const isLight = document.body.dataset.theme === 'light';
+    const scOverlayColor = isLight ? 'rgba(255, 204, 0, 0.45)' : 'rgba(255, 204, 0, 0.2)';
+    const vscOverlayColor = isLight ? 'rgba(255, 102, 0, 0.45)' : 'rgba(255, 102, 0, 0.2)';
+    
+    let scBarsHtml = '';
     if (scPeriods.length > 0) {
-      let scBarsHtml = '';
       scPeriods.forEach(p => {
-          const leftPct = ((p.startLap - 1) / totalLaps) * 100;
-          const widthPct = ((p.endLap - p.startLap) / totalLaps) * 100;
+          const leftPct = ((p.startLap - 1) / lapRange) * 100;
+          const widthPct = ((p.endLap - p.startLap) / lapRange) * 100;
           const isSC = p.type === 'SC';
-          const color1 = isSC ? '#ffcc00' : '#ff6600';
-          const color2 = '#222222';
-          const bg = `repeating-linear-gradient(45deg, ${color1}, ${color1} 4px, ${color2} 4px, ${color2} 8px)`;
-          scBarsHtml += `<div style="position:absolute; left:${leftPct}%; width:${widthPct}%; height:100%; background:${bg}; border-left: 1px solid ${color1}; border-right: 1px solid ${color1};"></div>`;
+          const color = isSC ? scOverlayColor : vscOverlayColor;
+          const borderCol = isSC ? '#ffcc00' : '#ff6600';
+          scBarsHtml += `<div style="position:absolute; left:${leftPct}%; width:${widthPct}%; height:100%; background:${color}; border-left: 1px solid ${borderCol}; border-right: 1px solid ${borderCol}; pointer-events:none;"></div>`;
       });
-      scTrackContainer.innerHTML = scBarsHtml;
-      scTrackContainer.style.display = 'block'; 
     }
+
+    const scMaster = document.getElementById('sc-master-overlay');
+    if (scMaster) scMaster.innerHTML = scBarsHtml;
 
     // Tire Stint Track
     const stintTrack = document.getElementById('detail-stint-track');
@@ -2254,36 +2755,44 @@ async function viewDriverDetails(driverNumber) {
       stintTrack.innerHTML = `<div style="color:var(--text-dim); padding:0.5rem; text-align:center; font-size:0.8rem;">No tire data available</div>`;
     } else {
       let trackHtml = '';
-      stints.forEach(stint => {
-        const stintLength = (stint.lap_end - stint.lap_start) + 1;
-        const widthPct = (stintLength / totalLaps) * 100;
+      stints.forEach((stint, idx) => {
+        let startPoint = stint.lap_start - 1;
+        let endPoint = stint.lap_end - 1;
+        if (idx < stints.length - 1) {
+           const nextStint = stints[idx + 1];
+           endPoint = (stint.lap_end - 1 + nextStint.lap_start - 1) / 2;
+        } else {
+           endPoint = totalLaps - 1;
+        }
+        
+        const widthPct = ((endPoint - startPoint) / lapRange) * 100;
         const rawCompound = stint.compound ? stint.compound.toUpperCase() : 'MEDIUM';
         const compoundClass = `tire-${rawCompound}`;
         const tireLabel = rawCompound[0];
         
         if (widthPct > 0) {
-          trackHtml += `<div class="tire-bar ${compoundClass}" style="width: ${widthPct}%" title="${stint.compound} (${stintLength} Laps)">${tireLabel}</div>`;
+          trackHtml += `<div class="tire-bar ${compoundClass}" style="width: ${widthPct}%" title="${stint.compound} (${stint.lap_end - stint.lap_start} Laps)">${tireLabel}</div>`;
         }
       });
-      stintTrack.innerHTML = trackHtml;
+      stintTrack.innerHTML = trackHtml; 
     }
 
-    // --- 7. CHART PREPARATION ---
-    // THE FIX: Strip out the in-laps here too!
+    // --- 7. LINE CHART PREPARATION ---
     const validLaps = laps.filter(l => l.lap_duration && l.lap_duration > 0 && !l.is_pit_out_lap && !l.is_pit_in_lap);
     if (validLaps.length === 0) {
       if (driverChartInstance) driverChartInstance.destroy();
+      document.getElementById('detail-tire-performance').innerHTML = `<div class="error-msg">No valid lap times to display.</div>`;
       return; 
     }
 
     const sortedDurations = [...validLaps].map(l => l.lap_duration).sort((a, b) => a - b);
     const medianTime = sortedDurations[Math.floor(sortedDurations.length / 2)];
-    const filteredLaps = validLaps.filter(l => l.lap_duration < medianTime * 1.25);
+    // Apply a wide filter for the line chart just to prune extreme anomalies
+    const filteredLaps = validLaps.filter(l => l.lap_duration < medianTime * 1.35);
 
     const chartLabels = Array.from({length: totalLaps}, (_, i) => `Lap ${i + 1}`);
     const chartData = Array(totalLaps).fill(null);
     
-    const isLight = document.body.dataset.theme === 'light';
     const hardColor = isLight ? '#aaaaaa' : '#ffffff'; 
     const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
     const tickColor = isLight ? '#666666' : '#888888';
@@ -2297,7 +2806,6 @@ async function viewDriverDetails(driverNumber) {
       chartData[idx] = l.lap_duration;
       
       let currentStint = stints.find(s => l.lap_number >= s.lap_start && l.lap_number <= s.lap_end);
-      // THE FIX: Default missing chart dots to MEDIUM
       const compound = currentStint ? (currentStint.compound || 'MEDIUM').toUpperCase() : 'MEDIUM';
       if (compound === 'SOFT') pointColors[idx] = '#ff3333';
       else if (compound === 'MEDIUM') pointColors[idx] = '#ffd12b';
@@ -2310,15 +2818,18 @@ async function viewDriverDetails(driverNumber) {
       id: 'syncBar',
       afterLayout: (chart) => {
         const track = document.getElementById('detail-stint-track');
-        const scTrack = document.getElementById('detail-sc-track');
-        if (chart.chartArea) {
+        const scMaster = document.getElementById('sc-master-overlay');
+        const wrapper = document.getElementById('lapTimeChartWrapper');
+        
+        // Only run sync math if the chart is actually visible
+        if (chart.chartArea && wrapper && wrapper.style.display !== 'none') {
           if (track) {
             track.style.marginLeft = chart.chartArea.left + 'px';
             track.style.width = (chart.chartArea.right - chart.chartArea.left) + 'px';
           }
-          if (scTrack) {
-            scTrack.style.marginLeft = chart.chartArea.left + 'px';
-            scTrack.style.width = (chart.chartArea.right - chart.chartArea.left) + 'px';
+          if (scMaster) {
+            scMaster.style.marginLeft = chart.chartArea.left + 'px';
+            scMaster.style.width = (chart.chartArea.right - chart.chartArea.left) + 'px';
           }
         }
       }
@@ -2329,7 +2840,7 @@ async function viewDriverDetails(driverNumber) {
 
     driverChartInstance = new Chart(ctx, {
       type: 'line',
-      plugins: [syncBarPlugin],
+      plugins: [syncBarPlugin], 
       data: {
         labels: chartLabels,
         datasets: [{
@@ -2361,6 +2872,165 @@ async function viewDriverDetails(driverNumber) {
         }
       }
     });
+
+    // --- 8. VIOLIN PLOT (Tire Performance) PREPARATION ---
+    const tpContainer = document.getElementById('detail-tire-performance');
+
+    function boxStats(times) {
+        if (times.length === 0) return null;
+        const sorted = [...times].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        return {
+            min: sorted[0],
+            q1: sorted[Math.floor(sorted.length * 0.25)],
+            median: median,
+            q3: sorted[Math.floor(sorted.length * 0.75)],
+            max: sorted[sorted.length - 1],
+            mean: sorted.reduce((a, b) => a + b, 0) / sorted.length
+        };
+    }
+
+    // THE FIX: Prune all SC laps and out/in laps for a true pace picture
+    const isSCLap = (lapNum) => scPeriods.some(p => lapNum >= Math.floor(p.startLap) && lapNum <= Math.ceil(p.endLap));
+    
+    const rawViolinLaps = validLaps.filter(l => !isSCLap(l.lap_number));
+    let violinCleanLaps = rawViolinLaps;
+    
+    // Tighten the bound specifically for the violin plot to 110% of median to trim traffic outliers
+    if (rawViolinLaps.length > 0) {
+        const sortedV = [...rawViolinLaps].map(l => l.lap_duration).sort((a,b) => a-b);
+        const medV = sortedV[Math.floor(sortedV.length / 2)];
+        violinCleanLaps = rawViolinLaps.filter(l => l.lap_duration <= medV * 1.10); 
+    }
+
+    const driverPerfData = {};
+    violinCleanLaps.forEach(l => {
+        let currentStint = stints.find(s => l.lap_number >= s.lap_start && l.lap_number <= s.lap_end);
+        const compound = currentStint ? (currentStint.compound || 'MEDIUM').toUpperCase() : 'MEDIUM';
+        if (!driverPerfData[compound]) driverPerfData[compound] = [];
+        driverPerfData[compound].push(l.lap_duration);
+    });
+
+    const COMPOUNDS = ['SOFT', 'MEDIUM', 'HARD', 'INTERMEDIATE', 'WET'];
+    const COMPOUND_COLORS = { SOFT: '#ff3333', MEDIUM: '#ffd12b', HARD: hardColor, INTERMEDIATE: '#33cc33', WET: '#0066ff' };
+    const usedCompounds = COMPOUNDS.filter(c => driverPerfData[c] && driverPerfData[c].length > 0);
+
+    if (usedCompounds.length === 0) {
+        tpContainer.innerHTML = `<div class="error-msg">No pure pace laps available (all laps were SC or outliers).</div>`;
+        return;
+    }
+
+    let minT = Infinity, maxT = -Infinity;
+    usedCompounds.forEach(c => {
+        const times = driverPerfData[c];
+        minT = Math.min(minT, ...times);
+        maxT = Math.max(maxT, ...times);
+    });
+
+    const yPad = (maxT - minT) * 0.1 || 1;
+    minT -= yPad;
+    maxT += yPad;
+
+    // Center and Exaggerate Proportions!
+    const CHART_H = 340;
+    const BOX_W = 140;   
+    const BOX_GAP = 60;  
+    const LEFT_PAD = 80;
+    const RIGHT_PAD = 80;
+    const TOP_PAD = 20;
+    const BOTTOM_PAD = 60; 
+
+    const svgWidth = LEFT_PAD + (usedCompounds.length * BOX_W) + ((usedCompounds.length - 1) * BOX_GAP) + RIGHT_PAD;
+    const svgHeight = CHART_H + TOP_PAD + BOTTOM_PAD;
+
+    function yPx(val) { return TOP_PAD + (1 - (val - minT) / (maxT - minT)) * CHART_H; }
+
+    function gaussianKDE(x, data, bw) {
+        let sum = 0;
+        for(let i=0; i<data.length; i++){
+            let v = (x - data[i]) / bw;
+            sum += Math.exp(-0.5 * v * v);
+        }
+        return sum / (data.length * bw * Math.sqrt(2 * Math.PI));
+    }
+
+    let svgContent = '';
+    
+    // Draw Y-axis grid lines
+    const numTicks = 6;
+    for(let i=0; i<=numTicks; i++) {
+        const val = minT + (i/numTicks)*(maxT - minT);
+        const y = yPx(val);
+        svgContent += `<line x1="${LEFT_PAD}" y1="${y}" x2="${svgWidth - RIGHT_PAD}" y2="${y}" stroke="${gridColor}" stroke-width="1"/>`;
+        svgContent += `<text x="${LEFT_PAD - 8}" y="${y + 4}" text-anchor="end" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="11">${fmtLapTime(val)}</text>`;
+    }
+
+    usedCompounds.forEach((compound, ci) => {
+        const times = driverPerfData[compound];
+        const color = COMPOUND_COLORS[compound];
+        const cx = LEFT_PAD + (ci * (BOX_W + BOX_GAP)) + (BOX_W / 2);
+
+        // Calculate KDE curves
+        const bw = 0.4; 
+        const steps = 100;
+        const stepSize = (maxT - minT) / steps;
+        const densities = [];
+        let maxDensity = 0;
+
+        for(let i=0; i<=steps; i++) {
+            const v = minT + i * stepSize;
+            const d = gaussianKDE(v, times, bw);
+            densities.push({ v, d });
+            if (d > maxDensity) maxDensity = d;
+        }
+
+        // Draw Violin Area
+        let pathD = '';
+        for(let i=0; i<=steps; i++) {
+            const pt = densities[i];
+            const pxX = cx + (pt.d / maxDensity) * (BOX_W / 2);
+            const pxY = yPx(pt.v);
+            pathD += i === 0 ? `M ${pxX} ${pxY} ` : `L ${pxX} ${pxY} `;
+        }
+        for(let i=steps; i>=0; i--) {
+            const pt = densities[i];
+            const pxX = cx - (pt.d / maxDensity) * (BOX_W / 2);
+            const pxY = yPx(pt.v);
+            pathD += `L ${pxX} ${pxY} `;
+        }
+        pathD += 'Z';
+        svgContent += `<path d="${pathD}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5" />`;
+
+        // Draw Individual Lap Dots (Scatter/Swarm)
+        times.forEach(t => {
+            const py = yPx(t);
+            const jitter = (Math.random() - 0.5) * (BOX_W * 0.35); // Random spread within the box
+            // THE FIX: Changed fill to the tire color and removed the background fill
+            svgContent += `<circle cx="${cx + jitter}" cy="${py}" r="2.5" fill="${color}" opacity="0.85"/>`;
+        });
+
+        // Boxplot Overlay
+        const s = boxStats(times);
+        if (s) {
+            const iqrW = 8;
+            svgContent += `<rect x="${cx - iqrW/2}" y="${yPx(s.q3)}" width="${iqrW}" height="${yPx(s.q1) - yPx(s.q3)}" fill="${color}" stroke="${color}" stroke-width="1"/>`;
+            svgContent += `<circle cx="${cx}" cy="${yPx(s.median)}" r="3.5" fill="var(--bg)" stroke="${color}" stroke-width="1.5"/>`;
+            
+            // Labels
+            svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 18}" text-anchor="middle" fill="${color}" font-family="Barlow Condensed,sans-serif" font-size="14" font-weight="700">${compound}</text>`;
+            svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 32}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="11">${times.length} laps</text>`;
+            svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 46}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="12" font-weight="700">Avg: ${fmtLapTime(s.mean)}</text>`;
+        }
+    });
+
+    // Centered SVG wrapper
+    tpContainer.innerHTML = `
+        <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; overflow-x:auto; overflow-y:hidden; text-align: center;">
+            <svg width="${svgWidth}" height="${svgHeight}" style="display:inline-block; max-width: 100%;">
+                ${svgContent}
+            </svg>
+        </div>
+    `;
 
   } catch (e) {
     console.error("View Driver Details Error:", e);
@@ -3250,67 +3920,101 @@ async function renderTrackDominance() {
   const container = document.getElementById('subtab-content-track-dominance');
   if (!container || !container.classList.contains('active')) return;
 
-  const selectA = document.getElementById('dom-driver-a');
-  const selectB = document.getElementById('dom-driver-b');
-  
-  // Populate dropdowns if empty
-  if (selectA.options.length === 0) {
-    const options = orderedDriversList.map(d => `<option value="${d.driver_number}">${d.name_acronym || d.last_name}</option>`).join('');
-    selectA.innerHTML = options;
-    selectB.innerHTML = options;
-    if (orderedDriversList.length > 1) selectB.selectedIndex = 1;
-  }
-
-  const dNumA = Number(selectA.value);
-  const dNumB = Number(selectB.value);
-  if (dNumA === dNumB) return;
-
   document.getElementById('dom-loading').style.display = 'flex';
-  document.getElementById('dom-results').style.display = 'none';
+  // Dim the results instead of hiding them so the page doesn't collapse and scroll up!
+  document.getElementById('dom-results').style.opacity = '0.4';
+  document.getElementById('dom-results').style.pointerEvents = 'none';
 
   try {
-    // 1. Find their fastest laps from the local database
+    const selectA = document.getElementById('dom-driver-a');
+    const selectB = document.getElementById('dom-driver-b');
+    
+    // 1. Fetch laps and find the fastest lap per driver for THIS specific session
     const allLaps = await fetchJSON(`${BASE}/laps?session_key=${currentSession.session_key}`);
-    const lapA = allLaps.filter(l => l.driver_number === dNumA && l.lap_duration).sort((a,b) => a.lap_duration - b.lap_duration)[0];
-    const lapB = allLaps.filter(l => l.driver_number === dNumB && l.lap_duration).sort((a,b) => a.lap_duration - b.lap_duration)[0];
+    
+    const driverBestLaps = {};
+    allLaps.forEach(l => {
+        if (l.lap_duration && l.lap_duration > 0 && !l.is_pit_out_lap && !l.is_pit_in_lap) {
+            if (!driverBestLaps[l.driver_number] || l.lap_duration < driverBestLaps[l.driver_number].lap_duration) {
+                driverBestLaps[l.driver_number] = l;
+            }
+        }
+    });
+
+    // 2. Rebuild dropdowns ONLY if we are loading a new session
+    if (window.lastDomSessionKey !== currentSession.session_key) {
+        window.lastDomSessionKey = currentSession.session_key;
+        
+        // Filter global drivers to only those who set a valid lap, then sort by lap time
+        const availableDrivers = orderedDriversList.filter(d => driverBestLaps[d.driver_number]);
+        availableDrivers.sort((a, b) => driverBestLaps[a.driver_number].lap_duration - driverBestLaps[b.driver_number].lap_duration);
+        
+        const options = availableDrivers.map(d => `<option value="${d.driver_number}">${d.name_acronym || d.last_name}</option>`).join('');
+        selectA.innerHTML = options;
+        selectB.innerHTML = options;
+        if (availableDrivers.length > 1) selectB.selectedIndex = 1;
+    }
+
+    const dNumA = Number(selectA.value);
+    const dNumB = Number(selectB.value);
+
+    if (dNumA === dNumB) {
+        document.getElementById('dom-loading').style.display = 'none';
+        return;
+    }
+
+    const lapA = driverBestLaps[dNumA];
+    const lapB = driverBestLaps[dNumB];
 
     if (!lapA || !lapB) throw new Error("Missing valid lap times for one or both drivers.");
 
-    // 2. Fetch live telemetry for JUST these two laps directly from OpenF1
-    const getTelemetry = async (lap, dNum) => {
-        const start = new Date(lap.date_start).toISOString();
-        const end = new Date(new Date(lap.date_start).getTime() + (lap.lap_duration * 1000)).toISOString();
+    // 3. Update the lap time UI next to the dropdowns
+    const timeAEl = document.getElementById('dom-time-a');
+    const timeBEl = document.getElementById('dom-time-b');
+    
+    if (timeAEl && timeBEl) {
+        const isAFaster = lapA.lap_duration <= lapB.lap_duration;
+        const gap = Math.abs(lapA.lap_duration - lapB.lap_duration).toFixed(3);
         
-        // Helper to safely fetch, prevent crashes, and guarantee an array is returned
-        const safeFetch = async (url) => {
-            try {
-                const res = await fetch(url);
-                if (!res.ok) return [];
-                let data = await res.json();
-                // Unwrap the data if the API puts it inside an object
-                if (data && typeof data === 'object' && !Array.isArray(data)) {
-                    data = data.data || data.response || data.items || [];
-                }
-                return Array.isArray(data) ? data : [];
-            } catch (err) {
-                return [];
-            }
-        };
+        let textA = fmtLapTime(lapA.lap_duration);
+        let textB = fmtLapTime(lapB.lap_duration);
+        const gapHtml = `<span style="font-size:0.85rem; color:var(--text-muted); font-weight:600; margin-left:6px;">(+${gap})</span>`;
 
-        const loc = await safeFetch(`${BASE}/location?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${start}&date<=${end}`);
-        const car = await safeFetch(`${BASE}/car_data?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${start}&date<=${end}`);
+        if (isAFaster) {
+            timeAEl.innerHTML = textA;
+            timeAEl.style.fontWeight = '900';
+            timeBEl.innerHTML = textB + gapHtml;
+            timeBEl.style.fontWeight = '500';
+        } else {
+            timeAEl.innerHTML = textA + gapHtml;
+            timeAEl.style.fontWeight = '500';
+            timeBEl.innerHTML = textB;
+            timeBEl.style.fontWeight = '900';
+        }
+    }
+
+    // 4. Fetch live telemetry for JUST these two laps directly from OpenF1
+    const getTelemetry = async (lap, dNum) => {
+        const start = new Date(lap.date_start);
+        const end = new Date(start.getTime() + (lap.lap_duration * 1000));
+        
+        // OpenF1 requires strictly encoded ISO strings for time filters to work reliably
+        const startStr = encodeURIComponent(start.toISOString());
+        const endStr = encodeURIComponent(end.toISOString());
+
+        const loc = await fetchJSON(`${BASE}/location?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[]);
+        const car = await fetchJSON(`${BASE}/car_data?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[]);
         return { loc, car, lap };
     };
 
     const [dataA, dataB] = await Promise.all([getTelemetry(lapA, dNumA), getTelemetry(lapB, dNumB)]);
     
-    // NEW: Safety check! If the API didn't have enough GPS points, stop before the math breaks
+    // Safety check! If the API didn't have enough GPS points, stop before the math breaks
     if (dataA.loc.length < 20 || dataB.loc.length < 20) {
         throw new Error("Telemetry is incomplete or unavailable from OpenF1 for these specific laps.");
     }
     
-    // 3. Mathematical Mini-Sectors
-    // Since F1 cars drive slightly different lines, we chunk the reference lap (Driver A) into 20 coordinate bins
+    // 5. Mathematical Mini-Sectors
     const NUM_SECTORS = 20;
     const refLoc = dataA.loc;
     const chunkSize = Math.floor(refLoc.length / NUM_SECTORS);
@@ -3325,7 +4029,6 @@ async function renderTrackDominance() {
         const segmentA = refLoc.slice(startIdx, endIdx);
         const timeA = (new Date(segmentA[segmentA.length-1].date) - new Date(segmentA[0].date)) / 1000;
         
-        // Find Driver B's corresponding time by matching coordinates (simplified approximation via percentage of lap)
         const startIdxB = Math.floor((startIdx / refLoc.length) * dataB.loc.length);
         const endIdxB = Math.floor((endIdx / refLoc.length) * dataB.loc.length);
         const segmentB = dataB.loc.slice(startIdxB, endIdxB);
@@ -3334,7 +4037,6 @@ async function renderTrackDominance() {
             timeB = (new Date(segmentB[segmentB.length-1].date) - new Date(segmentB[0].date)) / 1000;
         }
 
-        // Get average speed from car_data for this window
         const carA = dataA.car.slice(startIdx, endIdx);
         const avgSpeed = carA.length > 0 ? carA.reduce((sum, c) => sum + c.speed, 0) / carA.length : 150;
         const isHighSpeed = avgSpeed > 180;
@@ -3349,11 +4051,10 @@ async function renderTrackDominance() {
         });
     }
 
-    // 4. Draw the Track Map (Centered & Interactive)
+    // 6. Draw the Track Map
     const canvas = document.getElementById('trackMapCanvas');
     const ctx = canvas.getContext('2d');
     
-    // Center Math: Find bounding box and calculate offsets to perfectly center the drawing
     const xCoords = refLoc.map(p => p.x);
     const yCoords = refLoc.map(p => p.y);
     const minX = Math.min(...xCoords), maxX = Math.max(...xCoords);
@@ -3371,10 +4072,9 @@ async function renderTrackDominance() {
     
     const getCanvasPos = (x, y) => ({
         cx: offsetX + (x - minX) * scale,
-        cy: canvas.height - offsetY - (y - minY) * scale // Y is inverted in GPS vs Canvas
+        cy: canvas.height - offsetY - (y - minY) * scale
     });
 
-    // Cache canvas coordinates for the hover distance calculations
     miniSectors.forEach(sec => {
         sec.canvasPoints = sec.coords.map(p => getCanvasPos(p.x, p.y));
     });
@@ -3401,7 +4101,6 @@ async function renderTrackDominance() {
                 ctx.lineTo(sec.canvasPoints[i].cx, sec.canvasPoints[i].cy);
             }
 
-            // Hover styling logic
             const isHovered = hoveredSectorId === sec.id;
             const isFaded = hoveredSectorId !== null && !isHovered;
             
@@ -3412,23 +4111,20 @@ async function renderTrackDominance() {
             ctx.setLineDash([]);
             ctx.stroke();
 
-            // Striping for teammates
             if (isSameTeam && sec.winner === 'B') {
                 ctx.strokeStyle = '#ffffff';
                 ctx.setLineDash([8, 8]);
                 ctx.stroke();
             }
         });
-        ctx.globalAlpha = 1.0; // Reset
+        ctx.globalAlpha = 1.0;
     };
 
-    // Global exposed function for bidirectional hover
     window.highlightDomSector = (sectorId) => {
         if (hoveredSectorId === sectorId) return;
         hoveredSectorId = sectorId;
         drawMap();
         
-        // Update table row styling
         miniSectors.forEach(sec => {
             const row = document.getElementById(`dom-row-${sec.id}`);
             if (row) {
@@ -3443,7 +4139,6 @@ async function renderTrackDominance() {
         });
     };
 
-    // Canvas interactivity
     canvas.onmousemove = (e) => {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -3464,7 +4159,7 @@ async function renderTrackDominance() {
             });
         });
 
-        if (closestDist < 25) { // Hover radius threshold
+        if (closestDist < 25) { 
             canvas.style.cursor = 'pointer';
             window.highlightDomSector(closestId);
         } else {
@@ -3475,10 +4170,9 @@ async function renderTrackDominance() {
 
     canvas.onmouseleave = () => window.highlightDomSector(null);
 
-    // Initial draw
     drawMap();
 
-    // 5. Build the Data UI
+    // 7. Build the Data UI
     document.getElementById('dom-map-legend').innerHTML = `
         <div style="display:flex; align-items:center; gap:6px;">
             <div style="width:12px; height:4px; background:${colorA}; border-radius:2px;"></div> 
@@ -3499,7 +4193,6 @@ async function renderTrackDominance() {
         </div>
     `;
 
-    // THE FIX: Removed the internal max-width wrapper so it perfectly fills the new 600px HTML container
     let tableHtml = `
         <div style="display:grid; grid-template-columns: 4rem 1fr 1fr; border-bottom:1px solid var(--border); padding:0.6rem 1rem; background:var(--surface2); font-family:'Barlow Condensed'; font-size:0.8rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">
             <div>Sector</div>
@@ -3511,10 +4204,8 @@ async function renderTrackDominance() {
     tableHtml += miniSectors.map(sec => {
         const aWin = sec.winner === 'A';
         const bWin = sec.winner === 'B';
-        
         const weightA = aWin ? '800' : '400';
         const colorTextA = aWin ? 'var(--text)' : 'var(--text-dim)';
-        
         const weightB = bWin ? '800' : '400';
         const colorTextB = bWin ? 'var(--text)' : 'var(--text-dim)';
         
@@ -3524,18 +4215,317 @@ async function renderTrackDominance() {
             <div style="color:var(--text-dim); font-size:0.85rem; font-weight:700;">${sec.id}</div>
             <div style="text-align:right; font-weight:${weightA}; color:${colorTextA};">${sec.timeA.toFixed(3)}</div>
             <div style="text-align:right; font-weight:${weightB}; color:${colorTextB};">${sec.timeB.toFixed(3)}</div>
-        </div>
-        `;
+        </div>`;
     }).join('');
     
     document.getElementById('dom-mini-sectors').innerHTML = tableHtml;
+
+    // 8. BUILD TELEMETRY TRACE CHARTS
+    function processCarData(carArr, lapStartTime) {
+        if(!carArr || carArr.length === 0) return [];
+        let res = [];
+        let t0 = new Date(lapStartTime).getTime();
+        let currentDist = 0;
+        for(let i=0; i<carArr.length; i++) {
+            let c = carArr[i];
+            let t = (new Date(c.date).getTime() - t0) / 1000;
+            if(i > 0) {
+                let dt = t - res[i-1].time;
+                let v = ((c.speed + carArr[i-1].speed) / 2) / 3.6; // avg speed in m/s
+                currentDist += v * dt;
+            }
+            res.push({ time: t, speed: c.speed, dist: currentDist });
+        }
+        return res;
+    }
+
+    const processedA = processCarData(dataA.car, lapA.date_start);
+    const processedB = processCarData(dataB.car, lapB.date_start);
+
+    // Prepare GPS data for corner math
+    const processedLocA = dataA.loc.map(l => ({
+        time: (new Date(l.date).getTime() - new Date(lapA.date_start).getTime()) / 1000,
+        x: l.x,
+        y: l.y
+    }));
+
+    function getLocAtTime(arr, targetTime) {
+        let idx = arr.findIndex(item => item.time >= targetTime);
+        if(idx <= 0) return arr[0] || {x:0, y:0};
+        if(idx === -1) return arr[arr.length-1] || {x:0, y:0};
+        let p1 = arr[idx-1], p2 = arr[idx];
+        let fraction = (targetTime - p1.time) / (p2.time - p1.time);
+        if(isNaN(fraction) || !isFinite(fraction)) fraction = 0;
+        return { x: p1.x + fraction * (p2.x - p1.x), y: p1.y + fraction * (p2.y - p1.y) };
+    }
+
+    const traceBody = document.getElementById('dom-trace-body');
     
-    tableHtml += `</div>`; // Close the max-width wrapper
-    
-    document.getElementById('dom-mini-sectors').innerHTML = tableHtml;
+    if (processedA.length === 0 || processedB.length === 0) {
+        traceBody.innerHTML = `
+            <div style="padding:3rem 1rem; text-align:center; color:var(--text-dim);">
+                Detailed speed telemetry is currently unavailable from the API for these laps.
+            </div>
+        `;
+    } else {
+        // --- NEW: HTML Wrapper setup for Drag-to-Zoom ---
+        traceBody.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <div style="display:flex; align-items:center; gap:1.5rem; font-family:'Barlow Condensed'; font-size:13px; font-weight:700; color:var(--text-muted); text-transform: uppercase;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <div style="width:32px; height:12px; background:rgba(0,0,0,0.1); border: 2px solid ${colorA}; border-radius:2px;"></div> 
+                        ${driverInfoA.name_acronym}
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <div style="width:32px; height:12px; background:rgba(0,0,0,0.1); border: 2px ${isSameTeam ? 'dashed' : 'solid'} ${colorB}; border-radius:2px;"></div> 
+                        ${driverInfoB.name_acronym}
+                    </div>
+                </div>
+                <button id="dom-reset-zoom" class="theme-toggle" style="display:none; padding: 0.3rem 1rem; border-color: var(--accent); color: var(--accent);">Reset Zoom</button>
+            </div>
+            
+            <div id="dom-chart-wrapper" style="position: relative; width: 100%; cursor: crosshair;">
+                <div id="dom-brush" style="position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,0.15); border: 1px dashed rgba(255,255,255,0.5); pointer-events: none; display: none; z-index: 50;"></div>
+                
+                <div style="height: 250px; width: 100%; position: relative;"><canvas id="dom-speed-chart"></canvas></div>
+                <div style="height: 150px; width: 100%; position: relative; margin-top: 0.5rem;"><canvas id="dom-delta-chart"></canvas></div>
+            </div>
+        `;
+        
+        const maxDist = Math.min(processedA[processedA.length-1].dist, processedB[processedB.length-1].dist);
+        const NUM_POINTS = 300; 
+        const step = maxDist / NUM_POINTS;
+
+        const chartLabels = [], speedA = [], speedB = [], deltaA = [], deltaB = [];
+        const trackX = [], trackY = [];
+        const fasterIsA = lapA.lap_duration <= lapB.lap_duration;
+
+        function getAtDist(arr, targetDist) {
+            let idx = arr.findIndex(item => item.dist >= targetDist);
+            if(idx === 0) return arr[0];
+            if(idx === -1) return arr[arr.length-1];
+            let p1 = arr[idx-1], p2 = arr[idx];
+            let fraction = (targetDist - p1.dist) / (p2.dist - p1.dist);
+            if(isNaN(fraction) || !isFinite(fraction)) fraction = 0;
+            return {
+                time: p1.time + fraction * (p2.time - p1.time),
+                speed: p1.speed + fraction * (p2.speed - p1.speed)
+            };
+        }
+
+        for(let i=0; i<=NUM_POINTS; i++) {
+            const d = i * step;
+            chartLabels.push((d/1000).toFixed(2) + 'km');
+            const ptA = getAtDist(processedA, d);
+            const ptB = getAtDist(processedB, d);
+
+            speedA.push(ptA.speed);
+            speedB.push(ptB.speed);
+
+            if (fasterIsA) {
+                deltaA.push(0); 
+                deltaB.push(ptB.time - ptA.time);
+            } else {
+                deltaB.push(0);
+                deltaA.push(ptA.time - ptB.time);
+            }
+
+            const locPt = getLocAtTime(processedLocA, ptA.time);
+            trackX.push(locPt.x);
+            trackY.push(locPt.y);
+        }
+
+        const corners = calculateTrackCorners(trackX, trackY);
+
+        const isLight = document.body.dataset.theme === 'light';
+        const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
+        const tickColor = isLight ? '#666' : '#aaa';
+        const markerLineColor = isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)';
+
+        const cornerMarkerPlugin = {
+            id: 'cornerMarker',
+            beforeDraw(chart) {
+                const { ctx, chartArea } = chart;
+                if (!chartArea || !corners.length) return;
+                
+                const meta = chart.getDatasetMeta(0);
+                if (!meta || !meta.data || meta.data.length === 0) return;
+
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.font = 'bold 11px "Barlow Condensed"';
+                ctx.fillStyle = tickColor;
+                ctx.strokeStyle = markerLineColor;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+
+                corners.forEach(c => {
+                    const pt = meta.data[c.index];
+                    if (pt) {
+                        const xPos = pt.x;
+                        if (xPos >= chartArea.left && xPos <= chartArea.right) {
+                            const isSpeedChart = chart.canvas.id === 'dom-speed-chart';
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(xPos, chartArea.top); 
+                            ctx.lineTo(xPos, chartArea.bottom);
+                            ctx.stroke();
+                            
+                            if (isSpeedChart) {
+                                ctx.fillText(c.text, xPos, chartArea.top - 4);
+                            }
+                        }
+                    }
+                });
+                ctx.restore();
+            }
+        };
+
+        const dsSpeedA = { label: driverInfoA.name_acronym, data: speedA, borderColor: colorA, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        const dsSpeedB = { label: driverInfoB.name_acronym, data: speedB, borderColor: colorB, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        
+        const dsDeltaA = { label: driverInfoA.name_acronym, data: deltaA, borderColor: colorA, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        const dsDeltaB = { label: driverInfoB.name_acronym, data: deltaB, borderColor: colorB, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+
+        if (isSameTeam) {
+            dsSpeedB.borderDash = [5, 5];
+            dsDeltaB.borderDash = [5, 5];
+        }
+
+        const ctxSpeed = document.getElementById('dom-speed-chart').getContext('2d');
+        if (window.domSpeedChartInstance) window.domSpeedChartInstance.destroy();
+        window.domSpeedChartInstance = new Chart(ctxSpeed, {
+            type: 'line',
+            data: { labels: chartLabels, datasets: [dsSpeedA, dsSpeedB] },
+            plugins: [cornerMarkerPlugin], 
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                layout: { padding: { top: 20 } }, 
+                plugins: { 
+                    legend: { display: false }, 
+                    tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
+                },
+                scales: {
+                    x: { display: false, grid: { color: gridColor } },
+                    y: { title: { display: true, text: 'Speed (km/h)', color: tickColor, font: { family: 'Barlow Condensed' } }, grid: { color: gridColor }, ticks: { color: tickColor } }
+                }
+            }
+        });
+
+        const ctxDelta = document.getElementById('dom-delta-chart').getContext('2d');
+        if (window.domDeltaChartInstance) window.domDeltaChartInstance.destroy();
+        window.domDeltaChartInstance = new Chart(ctxDelta, {
+            type: 'line',
+            data: { labels: chartLabels, datasets: [dsDeltaA, dsDeltaB] },
+            plugins: [cornerMarkerPlugin], 
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { 
+                    legend: { display: false },
+                    tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
+                },
+                scales: {
+                    x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 15, font: { family: 'Barlow Condensed' } } },
+                    y: { reverse: true, title: { display: true, text: 'Gap (s)', color: tickColor, font: { family: 'Barlow Condensed' } }, grid: { color: gridColor }, ticks: { color: tickColor } }
+                }
+            }
+        });
+
+        // --- NEW: Interactive Drag-to-Zoom Logic ---
+        const chartWrapper = document.getElementById('dom-chart-wrapper');
+        const brush = document.getElementById('dom-brush');
+        const resetBtn = document.getElementById('dom-reset-zoom');
+        
+        let isDragging = false;
+        let startX = 0;
+
+        chartWrapper.onmousedown = (e) => {
+            isDragging = true;
+            const rect = chartWrapper.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            brush.style.left = startX + 'px';
+            brush.style.width = '0px';
+            brush.style.display = 'block';
+        };
+
+        chartWrapper.onmousemove = (e) => {
+            if (!isDragging) return;
+            const rect = chartWrapper.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            brush.style.left = Math.min(startX, currentX) + 'px';
+            brush.style.width = Math.abs(currentX - startX) + 'px';
+        };
+
+        const finishDrag = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            brush.style.display = 'none';
+
+            const rect = chartWrapper.getBoundingClientRect();
+            const endX = e.clientX - rect.left;
+            
+            const minPixelX = Math.min(startX, endX);
+            const maxPixelX = Math.max(startX, endX);
+
+            // Ignore accidental tiny clicks
+            if (maxPixelX - minPixelX < 15) return;
+
+            const chart = window.domSpeedChartInstance;
+            if (!chart || !chart.chartArea) return;
+            const area = chart.chartArea;
+
+            // Calculate percentage relative to the chart's plotting area boundaries
+            let pctStart = (minPixelX - area.left) / area.width;
+            let pctEnd = (maxPixelX - area.left) / area.width;
+            
+            // Constrain constraints to actual chart bounds
+            pctStart = Math.max(0, Math.min(1, pctStart));
+            pctEnd = Math.max(0, Math.min(1, pctEnd));
+
+            const currentMin = chart.options.scales.x.min ?? 0;
+            const currentMax = chart.options.scales.x.max ?? (chartLabels.length - 1);
+            const currentRange = currentMax - currentMin;
+
+            const newMin = Math.round(currentMin + pctStart * currentRange);
+            const newMax = Math.round(currentMin + pctEnd * currentRange);
+
+            if (newMax - newMin > 5) {
+                // Apply limits and instantly redraw without animation
+                window.domSpeedChartInstance.options.scales.x.min = newMin;
+                window.domSpeedChartInstance.options.scales.x.max = newMax;
+                window.domSpeedChartInstance.update('none');
+
+                window.domDeltaChartInstance.options.scales.x.min = newMin;
+                window.domDeltaChartInstance.options.scales.x.max = newMax;
+                window.domDeltaChartInstance.update('none');
+
+                resetBtn.style.display = 'block';
+            }
+        };
+
+        chartWrapper.onmouseup = finishDrag;
+        chartWrapper.onmouseleave = finishDrag;
+
+        resetBtn.onclick = () => {
+            delete window.domSpeedChartInstance.options.scales.x.min;
+            delete window.domSpeedChartInstance.options.scales.x.max;
+            window.domSpeedChartInstance.update('none');
+
+            delete window.domDeltaChartInstance.options.scales.x.min;
+            delete window.domDeltaChartInstance.options.scales.x.max;
+            window.domDeltaChartInstance.update('none');
+
+            resetBtn.style.display = 'none';
+        };
+    }
 
     document.getElementById('dom-loading').style.display = 'none';
     document.getElementById('dom-results').style.display = 'block';
+    document.getElementById('dom-results').style.opacity = '1';
+    document.getElementById('dom-results').style.pointerEvents = 'auto';
 
   } catch (e) {
     document.getElementById('dom-loading').innerHTML = `<div class="error-msg">Telemetry analysis failed: ${e.message}</div>`;
@@ -3554,6 +4544,43 @@ function toggleMobileStandings(panelId) {
     document.body.style.overflow = 'hidden'; // Lock background scrolling
   }
 }
+
+window.toggleMiniSectors = function() {
+    const wrapper = document.getElementById('dom-mini-sectors-wrapper');
+    const btn = document.getElementById('dom-toggle-times-btn');
+    if (wrapper.style.display === 'none') {
+        wrapper.style.display = 'block';
+        btn.textContent = 'Hide Sector Times';
+    } else {
+        wrapper.style.display = 'none';
+        btn.textContent = 'Show Sector Times';
+    }
+};
+
+window.toggleLapTimeChart = () => {
+    const wrapper = document.getElementById('lapTimeChartWrapper');
+    const track = document.getElementById('detail-stint-track');
+    const scMaster = document.getElementById('sc-master-overlay');
+    
+    if (!wrapper) return;
+
+    if (wrapper.style.display === 'none') {
+        wrapper.style.display = 'block';
+        // Force Chart.js to recalculate layout and fire the sync plugin
+        if (driverChartInstance) driverChartInstance.update(); 
+    } else {
+        wrapper.style.display = 'none';
+        // When chart is hidden, perfectly reset the bars to full screen width
+        if (track) {
+            track.style.marginLeft = '0px';
+            track.style.width = '100%';
+        }
+        if (scMaster) {
+            scMaster.style.marginLeft = '0px';
+            scMaster.style.width = '100%';
+        }
+    }
+};
 
 startApp();
 </script>
