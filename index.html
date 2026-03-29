@@ -297,8 +297,38 @@
       <div class="view active" id="view-season">
         <div class="view-title" id="season-title-text">2026 Formula One World Championship</div>
         <div class="view-sub" id="season-sub">Loading calendar...</div>
-        <div id="season-grid" class="season-grid">
-          <div class="loading"><div class="spinner"></div>Fetching calendar</div>
+        
+        <div id="season-main-tabs" class="subtabs">
+          <button class="subtab-btn active" id="season-tab-btn-weekends" onclick="switchSeasonTab('weekends')">Race Weekends</button>
+          <button class="subtab-btn" id="season-tab-btn-summary" onclick="switchSeasonTab('summary')">Season Summary</button>
+          <button class="subtab-btn" id="season-tab-btn-testing" onclick="switchSeasonTab('testing')">Pre-Season Testing</button>      
+        </div>
+
+        <div id="season-tab-content-weekends" class="subtab-content active">
+          <div id="season-grid" class="season-grid">
+            <div class="loading"><div class="spinner"></div>Fetching calendar</div>
+          </div>
+        </div>
+
+        <div id="season-tab-content-testing" class="subtab-content">
+          <div id="season-grid-testing" class="season-grid">
+            <div class="loading"><div class="spinner"></div>Fetching testing data</div>
+          </div>
+        </div>
+
+        <div id="season-tab-content-weekends" class="subtab-content active">
+          <div id="season-grid" class="season-grid">
+            <div class="loading"><div class="spinner"></div>Fetching calendar</div>
+          </div>
+        </div>
+
+        <div id="season-tab-content-summary" class="subtab-content">
+          <div id="season-summary-leaders" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+            <div class="loading" style="grid-column: 1 / -1; padding: 2rem;"><div class="spinner"></div>Loading championship leaders...</div>
+          </div>
+          <div id="season-championship-battle-area" style="color:var(--text-dim); padding:2rem 1rem; text-align:center;">
+             Championship battle timeline coming soon...
+          </div>
         </div>
       </div>
 
@@ -324,11 +354,19 @@
                 <span style="font-family:'Barlow Condensed'; font-size:1.2rem; font-weight:700; color:var(--text-dim);">VS</span>
                 <select id="dom-driver-b" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="renderTrackDominance()"></select>
               </div>
+              <button id="dom-toggle-times-btn" class="theme-toggle" onclick="toggleMiniSectors()" style="margin-top: 1rem; padding: 0.4rem 1rem;">Show Sector Times</button>
             </div>
             
             <div id="dom-loading" class="loading" style="display:none;"><div class="spinner"></div>Analyzing Telemetry...</div>
             
             <div id="dom-results" style="display:none;">
+              
+              <div id="dom-trace-container" style="width: 100%; margin-bottom: 2.5rem;">
+                <div class="standings-title" style="margin-bottom: 0.5rem; text-align: left;">Telemetry Trace</div>
+                <div id="dom-trace-body" style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1rem;">
+                  </div>
+              </div>
+
               <div style="max-width: 600px; margin: 0 auto;">
                 
                 <div id="dom-analysis" class="stats-bar" style="margin-bottom:1.5rem; justify-content:space-around; background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1rem;"></div>
@@ -338,12 +376,14 @@
                   <div id="dom-map-legend" style="display:flex; justify-content:center; gap:1.5rem; margin-top:1.5rem; font-family:'Barlow Condensed'; font-size:0.9rem; font-weight:700;"></div>
                 </div>
                 
-                <div class="standings-title" style="margin-bottom: 0.5rem; text-align: center;">Mini Sector Times (Seconds)</div>
-                <div id="dom-mini-sectors" style="background:var(--surface); border:1px solid var(--border); border-radius:4px; overflow:hidden;"></div>
+                <div id="dom-mini-sectors-wrapper" style="display:none; margin-bottom: 1.5rem;">
+                  <div class="standings-title" style="margin-bottom: 0.5rem; text-align: center;">Mini Sector Times (Seconds)</div>
+                  <div id="dom-mini-sectors" style="background:var(--surface); border:1px solid var(--border); border-radius:4px; overflow:hidden;"></div>
+                </div>
                 
               </div>
             </div>
-          </div> <div id="subtab-content-results" class="subtab-content active">
+          </div><div id="subtab-content-results" class="subtab-content active">
             <div id="stats-bar" class="stats-bar"></div>
             <div id="drivers-list" class="drivers-list">
               <div class="loading"><div class="spinner"></div>Fetching results</div>
@@ -785,6 +825,7 @@ function goHome() {
   currentSession = null;
   updateBreadcrumb();
   showView('view-season');
+  switchSeasonTab('weekends'); // <--- ADD THIS
 }
 
 function toggleTheme() {
@@ -847,6 +888,16 @@ function switchDriverSubTab(tabId) {
   if (tabId === 'lap-times' && currentDriverView && currentSession) {
     renderBoxWhisker('driver-subtab-content-lap-times', currentDriverView);
   }
+}
+
+function switchSeasonTab(tabId) {
+  document.querySelectorAll('#season-main-tabs .subtab-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`season-tab-btn-${tabId}`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  document.querySelectorAll('#view-season .subtab-content').forEach(content => content.classList.remove('active'));
+  const activeContent = document.getElementById(`season-tab-content-${tabId}`);
+  if (activeContent) activeContent.classList.add('active');
 }
 
 function updateDriverSubTabsForSession() {
@@ -1486,6 +1537,7 @@ async function loadStandings() {
   if (pastMeetings.length === 0) {
     document.getElementById('standings-drivers').innerHTML = `<div class="standings-header"><span class="standings-title">Drivers</span></div><div style="padding:1rem;font-size:0.8rem;color:var(--text-dim);text-align:center">Season not started</div>`;
     document.getElementById('standings-constructors').innerHTML = `<div class="standings-header"><span class="standings-title">Constructors</span></div><div style="padding:1rem;font-size:0.8rem;color:var(--text-dim);text-align:center">Season not started</div>`;
+    document.getElementById('season-summary-leaders').innerHTML = `<div style="grid-column: 1/-1; padding: 2rem; color:var(--text-dim); text-align:center;">Season not started</div>`;
     return;
   }
   try {
@@ -1565,6 +1617,83 @@ async function loadStandings() {
             <div class="s-pts">${t.points_current}<span class="pts-label">pts</span></div>
           </div>`;
       }).join('')}`;
+
+      // --- NEW: Populate Season Summary Top Tiles ---
+    const driverLeader = sortedDrivers[0];
+    const teamLeader = sortedTeams[0];
+    const summaryContainer = document.getElementById('season-summary-leaders');
+
+    if (summaryContainer && driverLeader && teamLeader) {
+        // Driver Leader Tile
+        const dInfo = driverInfoMap[driverLeader.driver_number] || {};
+        const dTc = teamColor(dInfo.team_name);
+        const acronym = dInfo.name_acronym || '';
+        const countryCode = dInfo.country_code || DRIVER_COUNTRY_FALLBACK[acronym] || '';
+        const iso2 = countryToIso2[countryCode] || '';
+        const nationalityHtml = iso2 ? `<img src="https://flagcdn.com/w40/${iso2}.png" style="height:14px; width:22px; object-fit:cover; border-radius:1px; border:1px solid rgba(0,0,0,0.2);" alt="${countryCode}">` : '';
+
+
+        // Driver Leader Tile (Badge on left, Name & Points on RIGHT)
+        // Driver Leader Tile (Badge on left, Name & Points on RIGHT)
+        const dTile = `
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1.25rem; cursor:pointer; transition: transform 0.15s, border-color 0.15s;"
+               onmouseover="this.style.borderColor='var(--border-hover)'; this.style.transform='translateY(-2px)';"
+               onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';"
+               onclick="openDriverProfile(${driverLeader.driver_number})">
+             <div style="font-size:0.95rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem; font-family:'Barlow Condensed', sans-serif; text-align:center;">Championship Leader</div>
+             <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+               
+               <div class="driver-num-badge" style="background:${dTc.bg}; color:${dTc.text}; width:auto; min-width:65px; height:36px; padding:0 10px; display:flex; align-items:center; gap:8px; border-radius:3px; justify-content: center; flex-shrink:0;">
+                 ${nationalityHtml}
+                 <span style="font-size:1.2rem; line-height:1; font-weight:700;">${driverLeader.driver_number}</span>
+               </div>
+
+               <div style="display:flex; align-items:center; gap:1.25rem; text-align:right; justify-content:flex-end; min-width:0;">
+                 <div style="font-family:'Barlow Condensed', sans-serif; font-size:1.4rem; font-weight:700; text-transform:uppercase; line-height:1.1; text-align:right;">${dInfo.full_name || dInfo.last_name}</div>
+                 <div style="display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0;">
+                   <div style="font-family:'Barlow Condensed', sans-serif; font-size:2.2rem; font-weight:900; line-height:1;">${driverLeader.points_current}</div>
+                   <div style="font-size:0.8rem; color:var(--text-muted); font-weight:700; font-family:'Barlow Condensed', sans-serif; margin-top:2px;">PTS</div>
+                 </div>
+               </div>
+               
+             </div>
+          </div>
+        `;
+
+        // Team Leader Tile
+        let tInfo = TEAM_INFO[teamLeader.team_name];
+        if (!tInfo) {
+            for (const [k, v] of Object.entries(TEAM_INFO)) {
+                if (teamLeader.team_name.includes(k) || k.includes(teamLeader.team_name)) { tInfo = v; break; }
+            }
+        }
+        const teamFullName = tInfo ? tInfo.full : teamLeader.team_name;
+        const tLogoHtml = getTeamLogoHtml(teamLeader.team_name, '32px');
+
+        // Constructor Leader Tile (Points on the LEFT, text mirrored)
+        const tTile = `
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1.25rem; cursor:pointer; transition: transform 0.15s, border-color 0.15s;"
+               onmouseover="this.style.borderColor='var(--border-hover)'; this.style.transform='translateY(-2px)';"
+               onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';"
+               onclick="openTeamProfile('${teamLeader.team_name}')">
+             <div style="font-size:0.95rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.75rem; font-family:'Barlow Condensed', sans-serif; text-align:center;">Constructors Leader</div>
+             <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+               <div style="display:flex; flex-direction:column; align-items:flex-start; flex-shrink:0;">
+                 <div style="font-family:'Barlow Condensed', sans-serif; font-size:2.2rem; font-weight:900; line-height:1;">${teamLeader.points_current}</div>
+                 <div style="font-size:0.8rem; color:var(--text-muted); font-weight:700; font-family:'Barlow Condensed', sans-serif; margin-top:2px;">PTS</div>
+               </div>
+               <div style="display:flex; align-items:center; gap:1.25rem; text-align:left; justify-content:flex-end; min-width:0;">
+                 <div style="font-family:'Barlow Condensed', sans-serif; font-size:1.4rem; font-weight:700; text-transform:uppercase; line-height:1.1;">${teamFullName}</div>
+                 <div style="width:48px; display:flex; justify-content:center; align-items:center; flex-shrink:0;">
+                   ${tLogoHtml || `<div style="font-size:1.5rem; color:var(--text-dim);">🏎️</div>`}
+                 </div>
+               </div>
+             </div>
+          </div>
+        `;
+
+        summaryContainer.innerHTML = dTile + tTile;
+    }
   } catch (e) {
     document.getElementById('standings-drivers').innerHTML = `<div class="standings-header"><span class="standings-title">Drivers</span></div><div style="padding:1rem;font-size:0.75rem;color:var(--text-dim);text-align:center">Unavailable</div>`;
     document.getElementById('standings-constructors').innerHTML = `<div class="standings-header"><span class="standings-title">Constructors</span></div><div style="padding:1rem;font-size:0.75rem;color:var(--text-dim);text-align:center">Unavailable</div>`;
@@ -1572,62 +1701,75 @@ async function loadStandings() {
 }
 
 function renderSeason() {
-  const past = allMeetings.filter(m => new Date(m.date_end) < NOW);
-  const future = allMeetings.filter(m => new Date(m.date_end) >= NOW);
-  const next = future[0];
+  // Split the data into Races and Testing
+  const raceMeetings = allMeetings.filter(m => !m.is_testing);
+  const testMeetings = allMeetings.filter(m => m.is_testing);
 
-  document.getElementById('season-sub').textContent = `${past.length} events completed · ${future.length} remaining`;
-  const grid = document.getElementById('season-grid');
+  const pastRaces = raceMeetings.filter(m => new Date(m.date_end) < NOW);
+  const futureRaces = raceMeetings.filter(m => new Date(m.date_end) >= NOW);
+  const nextRace = futureRaces[0];
+
+  // Update subtitle to only count actual races
+  document.getElementById('season-sub').textContent = `${pastRaces.length} races completed · ${futureRaces.length} remaining`;
   
-  grid.innerHTML = allMeetings.map((m, i) => {
-    const isPast = new Date(m.date_end) < NOW;
-    const isNext = next && m.meeting_key === next.meeting_key;
-    let cls = isPast ? '' : isNext ? 'next-race' : 'future-race';
-    const onclick = (isPast || isNext) ? `onclick="selectMeeting(${m.meeting_key})"` : '';
+  // Helper to generate the card HTML to avoid duplicating code
+  const generateCards = (meetings, nextEvent) => {
+    if (meetings.length === 0) return `<div style="grid-column: 1/-1; padding: 2rem; color: var(--text-dim);">No events scheduled.</div>`;
     
-    const imgHtml = m.circuit_image
-      ? `<img src="${m.circuit_image}" alt="${m.circuit_short_name}" onerror="this.parentElement.innerHTML='<div class=\\'card-img-placeholder\\'>Circuit</div>'">`
-      : `<div class="card-img-placeholder">Circuit</div>`;
+    return meetings.map((m) => {
+      const isPast = new Date(m.date_end) < NOW;
+      const isNext = nextEvent && m.meeting_key === nextEvent.meeting_key;
+      let cls = isPast ? '' : isNext ? 'next-race' : 'future-race';
+      const onclick = (isPast || isNext) ? `onclick="selectMeeting(${m.meeting_key})"` : '';
       
-    // --- NEW: Use accurate Race Week labels ---
-    const roundLabel = m.is_testing ? 'Pre-Season Testing' : `Race Week ${m.race_week}`;
-    
-    // Grab the full sponsored name, strip "Formula 1", and strip the year from the end
-    let officialName = m.meeting_official_name || m.meeting_name;
-    officialName = officialName
-      .replace(/FORMULA 1/i, '')     // Removes "Formula 1" from the beginning
-      .trim()                        // Cleans up the leading space
-      .replace(/\s*\d{4}$/, '')      // Removes the 4-digit year from the very end
-      .trim();                       // Cleans up any trailing spaces left behind
-
-    // Build the Flag for the left side
-    const flagCode = getCountryCode(m.country_name);
-    const flagHtml = m.country_name ? `<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${flagCode}.svg" style="width: 28px; height: auto; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); flex-shrink: 0; margin-top: 4px;">` : '';
-    
-    return `
-      <div class="race-card ${cls}" ${onclick}>
-        ${isNext ? '<div class="next-badge">Next</div>' : ''}
-        <div class="card-accent-bar"></div>
-        <div class="card-img">${imgHtml}</div>
+      const imgHtml = m.circuit_image
+        ? `<img src="${m.circuit_image}" alt="${m.circuit_short_name}" onerror="this.parentElement.innerHTML='<div class=\\'card-img-placeholder\\'>Circuit</div>'">`
+        : `<div class="card-img-placeholder">Circuit</div>`;
         
-        <div class="card-body" style="display: flex; gap: 0.75rem; align-items: flex-start;">
-          ${flagHtml}
-          <div style="display: flex; flex-direction: column;">
-            <div class="card-round">${roundLabel}</div>
-            <div class="card-name" style="font-size: 1rem; line-height: 1.15; margin-bottom: 4px;">${officialName}</div>
-            <div class="card-date">${fmtDate(m.date_start)}</div>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
+      const roundLabel = m.is_testing ? 'Pre-Season Testing' : `Race ${m.race_week}`;
+      
+      let officialName = m.meeting_official_name || m.meeting_name;
+      officialName = officialName.replace(/FORMULA 1/i, '').trim().replace(/\s*\d{4}$/, '').trim();
 
-  // --- NEW: Populate Quick Select Dropdown with accurate prefixes ---
+      const flagCode = getCountryCode(m.country_name);
+      const flagHtml = m.country_name ? `<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${flagCode}.svg" style="width: 28px; height: auto; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); flex-shrink: 0; margin-top: 4px;">` : '';
+      
+      return `
+        <div class="race-card ${cls}" ${onclick}>
+          ${isNext ? '<div class="next-badge">Next</div>' : ''}
+          <div class="card-accent-bar"></div>
+          <div class="card-img">${imgHtml}</div>
+          <div class="card-body" style="display: flex; gap: 0.75rem; align-items: flex-start;">
+            ${flagHtml}
+            <div style="display: flex; flex-direction: column;">
+              <div class="card-round">${roundLabel}</div>
+              <div class="card-name" style="font-size: 1rem; line-height: 1.15; margin-bottom: 4px;">${officialName}</div>
+              <div class="card-date">${fmtDate(m.date_start)}</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  };
+
+  // Render the two separate grids
+  document.getElementById('season-grid').innerHTML = generateCards(raceMeetings, nextRace);
+  
+  const testGrid = document.getElementById('season-grid-testing');
+  if (testGrid) {
+    const nextTest = testMeetings.filter(m => new Date(m.date_end) >= NOW)[0];
+    testGrid.innerHTML = generateCards(testMeetings, nextTest);
+  }
+
+  // Populate Quick Select Dropdown
   const quickSelect = document.getElementById('quick-race-select');
   if (quickSelect) {
     let options = '';
+    const nextOverall = allMeetings.filter(m => new Date(m.date_end) >= NOW)[0];
+    
     allMeetings.forEach((m) => {
       const isPast = new Date(m.date_end) < NOW;
-      const isNext = next && m.meeting_key === next.meeting_key;
+      const isNext = nextOverall && m.meeting_key === nextOverall.meeting_key;
+      
       if (isPast || isNext) {
         const prefix = m.is_testing ? 'TEST' : `Race ${m.race_week}`;
         options += `<option value="${m.meeting_key}">${prefix} - ${m.meeting_name}</option>`;
@@ -3278,27 +3420,16 @@ async function renderTrackDominance() {
 
     // 2. Fetch live telemetry for JUST these two laps directly from OpenF1
     const getTelemetry = async (lap, dNum) => {
-        const start = new Date(lap.date_start).toISOString();
-        const end = new Date(new Date(lap.date_start).getTime() + (lap.lap_duration * 1000)).toISOString();
+        const start = new Date(lap.date_start);
+        const end = new Date(start.getTime() + (lap.lap_duration * 1000));
         
-        // Helper to safely fetch, prevent crashes, and guarantee an array is returned
-        const safeFetch = async (url) => {
-            try {
-                const res = await fetch(url);
-                if (!res.ok) return [];
-                let data = await res.json();
-                // Unwrap the data if the API puts it inside an object
-                if (data && typeof data === 'object' && !Array.isArray(data)) {
-                    data = data.data || data.response || data.items || [];
-                }
-                return Array.isArray(data) ? data : [];
-            } catch (err) {
-                return [];
-            }
-        };
+        // OpenF1 requires strictly encoded ISO strings for time filters to work reliably
+        const startStr = encodeURIComponent(start.toISOString());
+        const endStr = encodeURIComponent(end.toISOString());
 
-        const loc = await safeFetch(`${BASE}/location?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${start}&date<=${end}`);
-        const car = await safeFetch(`${BASE}/car_data?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${start}&date<=${end}`);
+        // Use fetchJSON so it leverages our rate-limit protections and catches HTTP errors
+        const loc = await fetchJSON(`${BASE}/location?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[]);
+        const car = await fetchJSON(`${BASE}/car_data?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[]);
         return { loc, car, lap };
     };
 
@@ -3499,7 +3630,7 @@ async function renderTrackDominance() {
         </div>
     `;
 
-    // THE FIX: Removed the internal max-width wrapper so it perfectly fills the new 600px HTML container
+    // Cleanly build the Mini Sector Table
     let tableHtml = `
         <div style="display:grid; grid-template-columns: 4rem 1fr 1fr; border-bottom:1px solid var(--border); padding:0.6rem 1rem; background:var(--surface2); font-family:'Barlow Condensed'; font-size:0.8rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">
             <div>Sector</div>
@@ -3511,10 +3642,8 @@ async function renderTrackDominance() {
     tableHtml += miniSectors.map(sec => {
         const aWin = sec.winner === 'A';
         const bWin = sec.winner === 'B';
-        
         const weightA = aWin ? '800' : '400';
         const colorTextA = aWin ? 'var(--text)' : 'var(--text-dim)';
-        
         const weightB = bWin ? '800' : '400';
         const colorTextB = bWin ? 'var(--text)' : 'var(--text-dim)';
         
@@ -3524,15 +3653,150 @@ async function renderTrackDominance() {
             <div style="color:var(--text-dim); font-size:0.85rem; font-weight:700;">${sec.id}</div>
             <div style="text-align:right; font-weight:${weightA}; color:${colorTextA};">${sec.timeA.toFixed(3)}</div>
             <div style="text-align:right; font-weight:${weightB}; color:${colorTextB};">${sec.timeB.toFixed(3)}</div>
-        </div>
-        `;
+        </div>`;
     }).join('');
     
     document.getElementById('dom-mini-sectors').innerHTML = tableHtml;
+
+    // ------------------------------------------------------------------
+    // NEW: BUILD TELEMETRY TRACE CHARTS (Time / Delta aligned by Distance)
+    // ------------------------------------------------------------------
+    // Mathematically integrate speed to find the actual distance traveled
+    function processCarData(carArr, lapStartTime) {
+        if(!carArr || carArr.length === 0) return [];
+        let res = [];
+        let t0 = new Date(lapStartTime).getTime();
+        let currentDist = 0;
+        for(let i=0; i<carArr.length; i++) {
+            let c = carArr[i];
+            let t = (new Date(c.date).getTime() - t0) / 1000;
+            if(i > 0) {
+                let dt = t - res[i-1].time;
+                let v = ((c.speed + carArr[i-1].speed) / 2) / 3.6; // avg speed in m/s
+                currentDist += v * dt;
+            }
+            res.push({ time: t, speed: c.speed, dist: currentDist });
+        }
+        return res;
+    }
+
+    const processedA = processCarData(dataA.car, lapA.date_start);
+    const processedB = processCarData(dataB.car, lapB.date_start);
+
+    // NEW: Bulletproof fallback if the API doesn't have the speed data
+    const traceBody = document.getElementById('dom-trace-body');
     
-    tableHtml += `</div>`; // Close the max-width wrapper
-    
-    document.getElementById('dom-mini-sectors').innerHTML = tableHtml;
+    if (processedA.length === 0 || processedB.length === 0) {
+        traceBody.innerHTML = `
+            <div style="padding:3rem 1rem; text-align:center; color:var(--text-dim);">
+                Detailed speed telemetry is currently unavailable from the API for these laps.
+            </div>
+        `;
+    } else {
+        // FIX FOR THE "NULL" ERROR: Always explicitly rebuild the canvases before drawing!
+        traceBody.innerHTML = `
+            <div style="height: 250px; width: 100%; position: relative;"><canvas id="dom-speed-chart"></canvas></div>
+            <div style="height: 150px; width: 100%; position: relative; margin-top: 0.5rem;"><canvas id="dom-delta-chart"></canvas></div>
+        `;
+        
+        const maxDist = Math.min(processedA[processedA.length-1].dist, processedB[processedB.length-1].dist);
+        const NUM_POINTS = 300; // Granularity of the chart
+        const step = maxDist / NUM_POINTS;
+
+        // Interpolate data points precisely against physical distance
+        function getAtDist(arr, targetDist) {
+            let idx = arr.findIndex(item => item.dist >= targetDist);
+            if(idx === 0) return arr[0];
+            if(idx === -1) return arr[arr.length-1];
+            let p1 = arr[idx-1], p2 = arr[idx];
+            let fraction = (targetDist - p1.dist) / (p2.dist - p1.dist);
+            if(isNaN(fraction) || !isFinite(fraction)) fraction = 0;
+            return {
+                time: p1.time + fraction * (p2.time - p1.time),
+                speed: p1.speed + fraction * (p2.speed - p1.speed)
+            };
+        }
+
+        const chartLabels = [], speedA = [], speedB = [], deltaA = [], deltaB = [];
+        
+        // The flat reference line is always the faster overall lap
+        const fasterIsA = lapA.lap_duration <= lapB.lap_duration;
+
+        for(let i=0; i<=NUM_POINTS; i++) {
+            const d = i * step;
+            chartLabels.push((d/1000).toFixed(2) + 'km');
+            const ptA = getAtDist(processedA, d);
+            const ptB = getAtDist(processedB, d);
+
+            speedA.push(ptA.speed);
+            speedB.push(ptB.speed);
+
+            // Delta Math: Positive value means that driver is SLOWER (took more time to reach that exact distance)
+            if (fasterIsA) {
+                deltaA.push(0); 
+                deltaB.push(ptB.time - ptA.time);
+            } else {
+                deltaB.push(0);
+                deltaA.push(ptA.time - ptB.time);
+            }
+        }
+
+        const isLight = document.body.dataset.theme === 'light';
+        const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
+        const tickColor = isLight ? '#666' : '#aaa';
+
+        // Prepare the Datasets
+        const dsSpeedA = { label: driverInfoA.name_acronym, data: speedA, borderColor: colorA, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        const dsSpeedB = { label: driverInfoB.name_acronym, data: speedB, borderColor: colorB, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        
+        const dsDeltaA = { label: driverInfoA.name_acronym, data: deltaA, borderColor: colorA, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        const dsDeltaB = { label: driverInfoB.name_acronym, data: deltaB, borderColor: colorB, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+
+        if (isSameTeam) {
+            dsSpeedB.borderDash = [5, 5];
+            dsDeltaB.borderDash = [5, 5];
+        }
+
+        // Draw Speed Chart
+        const ctxSpeed = document.getElementById('dom-speed-chart').getContext('2d');
+        if (window.domSpeedChartInstance) window.domSpeedChartInstance.destroy();
+        window.domSpeedChartInstance = new Chart(ctxSpeed, {
+            type: 'line',
+            data: { labels: chartLabels, datasets: [dsSpeedA, dsSpeedB] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { 
+                    legend: { position: 'top', labels: { color: tickColor, font: { family: 'Barlow Condensed', size: 13, weight: 600 } } },
+                    tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
+                },
+                scales: {
+                    x: { display: false, grid: { color: gridColor } }, // Hide X axis to seamlessly merge with Delta chart
+                    y: { title: { display: true, text: 'Speed (km/h)', color: tickColor, font: { family: 'Barlow Condensed' } }, grid: { color: gridColor }, ticks: { color: tickColor } }
+                }
+            }
+        });
+
+        // Draw Time Delta Chart
+        const ctxDelta = document.getElementById('dom-delta-chart').getContext('2d');
+        if (window.domDeltaChartInstance) window.domDeltaChartInstance.destroy();
+        window.domDeltaChartInstance = new Chart(ctxDelta, {
+            type: 'line',
+            data: { labels: chartLabels, datasets: [dsDeltaA, dsDeltaB] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { 
+                    legend: { display: false },
+                    tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
+                },
+                scales: {
+                    x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 15, font: { family: 'Barlow Condensed' } } },
+                    y: { title: { display: true, text: 'Gap (s)', color: tickColor, font: { family: 'Barlow Condensed' } }, grid: { color: gridColor }, ticks: { color: tickColor } }
+                }
+            }
+        });
+    }
 
     document.getElementById('dom-loading').style.display = 'none';
     document.getElementById('dom-results').style.display = 'block';
@@ -3554,6 +3818,18 @@ function toggleMobileStandings(panelId) {
     document.body.style.overflow = 'hidden'; // Lock background scrolling
   }
 }
+
+window.toggleMiniSectors = function() {
+    const wrapper = document.getElementById('dom-mini-sectors-wrapper');
+    const btn = document.getElementById('dom-toggle-times-btn');
+    if (wrapper.style.display === 'none') {
+        wrapper.style.display = 'block';
+        btn.textContent = 'Hide Sector Times';
+    } else {
+        wrapper.style.display = 'none';
+        btn.textContent = 'Show Sector Times';
+    }
+};
 
 startApp();
 </script>
