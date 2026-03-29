@@ -512,6 +512,16 @@ const countryToIso2 = {
   'NZL': 'nz', 'ARG': 'ar', 'BRA': 'br', 'ITA': 'it', 'CHE': 'ch',
   'BEL': 'be', 'AUT': 'at'
 };
+// Fallback map for when the API forgets to include driver nationalities in newer seasons
+const DRIVER_COUNTRY_FALLBACK = {
+  'VER': 'NED', 'PER': 'MEX', 'HAM': 'GBR', 'RUS': 'GBR',
+  'LEC': 'MON', 'SAI': 'ESP', 'NOR': 'GBR', 'PIA': 'AUS',
+  'ALO': 'ESP', 'STR': 'CAN', 'GAS': 'FRA', 'OCO': 'FRA',
+  'ALB': 'THA', 'COL': 'ARG', 'TSU': 'JPN', 'LAW': 'NZL',
+  'HUL': 'GER', 'MAG': 'DEN', 'BOT': 'FIN', 'ZHO': 'CHN',
+  'BEA': 'GBR', 'ANT': 'ITA', 'DOO': 'AUS', 'BOR': 'BRA',
+  'RIC': 'AUS', 'SAR': 'USA', 'HAD': 'FRA'
+};
 const BASE = 'https://api.openf1.org/v1';
 const NOW = new Date();
 let currentYear = 2026;
@@ -559,7 +569,7 @@ const TEAM_INFO = {
 };
 
 // Global Helper to easily grab a Team Logo HTML tag anywhere in the app
-function getTeamLogoHtml(teamName, height = '14px') {
+function getTeamLogoHtml(teamName, height = '14px', badgeTextColor = null) {
   if (!teamName) return '';
   let tInfo = TEAM_INFO[teamName];
   if (!tInfo) {
@@ -568,8 +578,37 @@ function getTeamLogoHtml(teamName, height = '14px') {
     }
   }
   if (!tInfo || !tInfo.logo) return '';
-  const logoClass = tInfo.invert ? 'invert-dark' : '';
-  return `<img src="${tInfo.logo}" class="${logoClass}" style="height:${height}; width:auto; max-width:24px; object-fit:contain; vertical-align:middle; display:inline-block;">`;
+  
+  let filterStyle = '';
+  let logoClass = '';
+  
+  // Identify teams that should NEVER be forced to white/black inside colored badges
+  const keepOriginalColor = teamName === 'Ferrari' || teamName === 'Red Bull Racing' || teamName === 'RB' || teamName === 'Racing Bulls';
+  
+  // If placed inside a colored badge, force contrast based on text color (unless exempt)
+  if (badgeTextColor && !keepOriginalColor) {
+      if (badgeTextColor === '#fff') {
+          filterStyle = 'filter: invert(1) brightness(2);';
+      } else if (badgeTextColor === '#000') {
+          filterStyle = 'filter: brightness(0);';
+      }
+  } else if (!badgeTextColor) {
+      // Standard dark mode inversion for plain backgrounds
+      logoClass = tInfo.invert ? 'invert-dark' : '';
+  }
+  
+  return `<img src="${tInfo.logo}" class="${logoClass}" style="height:${height}; width:auto; max-width:24px; object-fit:contain; vertical-align:middle; display:inline-block; ${filterStyle}">`;
+}
+
+// Global Helper to easily grab a colored SVG Trophy
+function getTrophyHtml(position, size = '14px', addMargin = true) {
+  if (position !== 1 && position !== 2 && position !== 3) return '';
+  const color = position === 1 ? 'var(--gold)' : position === 2 ? 'var(--silver)' : 'var(--bronze)';
+  const margin = addMargin ? 'margin-right:6px;' : '';
+  
+  return `<svg style="width:${size}; height:${size}; vertical-align:text-bottom; fill:${color}; ${margin} display:inline-block;" viewBox="0 0 24 24">
+    <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/>
+  </svg>`;
 }
 
 const CIRCUIT_FULL_NAMES = {
@@ -972,13 +1011,18 @@ async function renderSessionStints(containerId) {
       }
 
       html += `
-        <div class="stint-row" style="grid-template-columns: 5rem 1fr; cursor:pointer; transition: opacity 0.15s;" 
+        <div class="stint-row" style="grid-template-columns: 5.5rem 1fr; cursor:pointer; transition: opacity 0.15s;" 
              onclick="previousView='view-drivers'; viewDriverDetails(${dn}); setTimeout(() => switchDriverSubTab('tire-strategy'), 50);"
              onmouseover="this.style.opacity='0.75'" 
              onmouseout="this.style.opacity='1'">
           <div style="display:flex; align-items:center; justify-content:flex-end; gap:0.5rem;">
             <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted); font-family:'Barlow Condensed', sans-serif;">${driver.position || '-'}</span>
-            <div class="driver-num-badge" style="background:${tc.bg}; color:${tc.text}; width:38px; height:26px; font-size:0.85rem; letter-spacing:0.05em;">${acronym}</div>
+            
+            <div class="driver-num-badge" style="background:${tc.bg}; color:${tc.text}; width:68px; flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:center; gap:6px;">
+              ${getTeamLogoHtml(driver.team_name, '10px', tc.text)}
+              <span style="font-size:0.85rem; letter-spacing:0.05em;">${acronym}</span>
+            </div>
+            
           </div>
           <div class="stint-track">${trackHtml}</div>
         </div>
@@ -1233,13 +1277,12 @@ async function renderBoxWhisker(containerId, driverNumber) {
         const acronym = driver.name_acronym || (driver.last_name ? driver.last_name.substring(0, 3).toUpperCase() : '???');
 
         const labelCY = driverY + driverBlockH / 2;
-        const badgeW = 42;
+        const badgeW = 60; // Increased width to fit logo and text
         const badgeH = 26;
         const badgeX = LABEL_W - badgeW - 8;
         const badgeY = labelCY - badgeH / 2;
 
-        // NEW: Driver row with full-width hover effect and solid Pit-Stop style badge
-        // Find team logo info to inject into the SVG
+        // Find team logo info to inject into the SVG badge
         let tInfo = TEAM_INFO[driver.team_name];
         if (!tInfo) {
           for (const [k, v] of Object.entries(TEAM_INFO)) {
@@ -1249,20 +1292,29 @@ async function renderBoxWhisker(containerId, driverNumber) {
 
         let svgLogoHtml = '';
         if (tInfo && tInfo.logo) {
-            const logoW = 20;
+            const logoW = 16;
             const logoH = 12;
-            const logoXPos = badgeX - logoW - 6;
-            const filterCss = document.body.dataset.theme === 'dark' && tInfo.invert ? 'filter: invert(1) brightness(2);' : '';
-            svgLogoHtml = `<image href="${tInfo.logo}" x="${logoXPos}" y="${labelCY - logoH / 2}" height="${logoH}" width="${logoW}" preserveAspectRatio="xMidYMid meet" style="${filterCss}" />`;
+            const logoXPos = badgeX + 6;
+            
+            // Force high-contrast based on badge text color (exempting Ferrari and Red Bull)
+            const keepOriginalColor = driver.team_name === 'Ferrari' || driver.team_name === 'Red Bull Racing' || driver.team_name === 'RB' || driver.team_name === 'Racing Bulls';
+            let filterCss = '';
+            if (!keepOriginalColor) {
+                filterCss = tc.text === '#fff' ? 'filter: invert(1) brightness(2);' : 'filter: brightness(0);';
+            }
+            
+            svgLogoHtml = `<image href="${tInfo.logo}" x="${logoXPos}" y="${labelCY - logoH / 2}" height="${logoH}" width="${logoW}" preserveAspectRatio="xMidYMid meet" style="${filterCss}" pointer-events="none" />`;
         }
 
-        // NEW: Driver row with full-width hover effect, logo, and solid badge
+        // Center text in the remaining space of the badge
+        const textXPos = badgeX + 16 + 8 + ((badgeW - 16 - 8) / 2);
+
         svgContent += `
           <g style="cursor:pointer;" onclick="previousView='view-drivers'; viewDriverDetails(${dn}); setTimeout(() => switchDriverSubTab('lap-times'), 50);">
             <rect x="0" y="${driverY - 4}" width="${svgViewW}" height="${driverBlockH + 8}" fill="transparent" onmouseover="this.setAttribute('fill', '${hoverBg}')" onmouseout="this.setAttribute('fill', 'transparent')" />
-            ${svgLogoHtml}
             <rect x="${badgeX}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="2" fill="${tc.bg}" pointer-events="none" />
-            <text x="${badgeX + badgeW / 2}" y="${labelCY + 4}" text-anchor="middle" fill="${tc.text}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700" pointer-events="none">${acronym}</text>
+            ${svgLogoHtml}
+            <text x="${textXPos}" y="${labelCY + 4}" text-anchor="middle" fill="${tc.text}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700" pointer-events="none">${acronym}</text>
           </g>`;
 
         // Subtle row separator
@@ -1872,6 +1924,12 @@ if (hasPositions) {
     const hasAnyLaps = Object.keys(fastestLap).length > 0;
     const sessionBestLap = hasAnyLaps ? Math.min(...Object.values(fastestLap).map(l => l.lap_duration)) : null;
     
+    let fastestDriverNumber = null;
+    if (sessionBestLap) {
+      const bestLapObj = Object.values(fastestLap).find(l => l.lap_duration === sessionBestLap);
+      if (bestLapObj) fastestDriverNumber = bestLapObj.driver_number;
+    }
+    
 const dnfStatHtml = isRace ? `<div class="stat"><div class="stat-label">DNF / DNS</div><div class="stat-value">${dnfCount} / ${dnsCount}</div></div>` : '';
 
     // --- NEW: Look up the full circuit name, or fall back to the short name if not found ---
@@ -1910,9 +1968,15 @@ const dnfStatHtml = isRace ? `<div class="stat"><div class="stat-label">DNF / DN
       const tc = teamColor(d.team_name);
       const delayCSS = `animation-delay:${(i % 10) * 30}ms`; 
       const gained = ptsGained[d.driver_number];
+      const isFL = (d.driver_number === fastestDriverNumber) && isRace;
+      const flBadge = isFL ? `<div style="font-family:'Barlow Condensed',sans-serif; font-size:0.65rem; font-weight:800; color:#c87eff; background:rgba(150,0,230,0.15); padding:1px 5px; border-radius:2px; margin-top:4px; text-align:center; letter-spacing:0.05em;">FL</div>` : '';
+
       const gainedHtml = (gained !== undefined)
-        ? `<div class="driver-pts-gained${gained === 0 ? ' zero' : ''}">${gained > 0 ? '+' : ''}${gained}<span style="font-size:0.6rem;font-weight:400;margin-left:1px">pts</span></div>`
-        : `<div></div>`;
+        ? `<div style="display:flex; flex-direction:column; align-items:flex-end;">
+             <div class="driver-pts-gained${gained === 0 ? ' zero' : ''}">${gained > 0 ? '+' : ''}${gained}<span style="font-size:0.6rem;font-weight:400;margin-left:1px">pts</span></div>
+             ${flBadge}
+           </div>`
+        : `<div style="display:flex; flex-direction:column; align-items:flex-end;">${flBadge}</div>`;
 
       let timingHtml = '';
 
@@ -1978,14 +2042,22 @@ const dnfStatHtml = isRace ? `<div class="stat"><div class="stat-label">DNF / DN
       }
 
       const rowHtml = `
-        <div class="driver-row" style="${delayCSS}" onclick="previousView='view-drivers'; viewDriverDetails(${d.driver_number})">
+       <div class="driver-row" style="grid-template-columns: 2.5rem auto 1fr auto auto auto; ${delayCSS}" onclick="previousView='view-drivers'; viewDriverDetails(${d.driver_number})">
           <div class="driver-pos ${posClass}">${pos}</div>
-          <div class="driver-num-badge" style="background:${tc.bg};color:${tc.text}">${d.driver_number}</div>
-          <div class="driver-info">
-            <div class="driver-name">${d.full_name || d.last_name || 'Unknown'}</div>
-            <div class="driver-team" style="display:flex; align-items:center; gap:6px; margin-top:2px;">
-                ${getTeamLogoHtml(d.team_name, '10px')} ${d.team_name || '—'}
+          
+          <div class="driver-num-badge" style="background:${tc.bg}; color:${tc.text}; width:68px; flex-shrink:0; display:flex; align-items:center; justify-content:center; gap:6px;">
+            ${getTeamLogoHtml(d.team_name, '12px', tc.text)}
+            <span>${d.driver_number}</span>
+          </div>
+          
+          <div class="driver-info" style="display:flex; justify-content:flex-start; align-items:center; gap: 1.5rem;">
+            <div style="min-width:0;">
+              <div class="driver-name">${d.full_name || d.last_name || 'Unknown'}</div>
+              <div class="driver-team" style="font-size:0.75rem; color:var(--text-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  ${d.team_name || '—'}
+              </div>
             </div>
+            ${pos <= 3 ? `<div style="display:flex; align-items:center;">${getTrophyHtml(pos, '32px', false)}</div>` : ''}
           </div>
           <div class="driver-timing">
             ${timingHtml}
@@ -2409,12 +2481,13 @@ async function openDriverProfile(driverNumber) {
       if (!isRace && !isQuali && !isPrac) continue;
 
       // THE FIX: Also fetch all session laps for Practice and Qualifying to calculate Purples!
-      const [resultData, allChampDrivers, myRaceLaps, allSessionLaps] = await Promise.all([
+      // Fetch all laps for ALL sessions so we can calculate Fastest Laps for races too!
+      const [resultData, allChampDrivers, allSessionLaps] = await Promise.all([
         fetchJSON(`${BASE}/session_result?session_key=${s.session_key}`).catch(() => []),
         isRace ? fetchJSON(`${BASE}/championship_drivers?session_key=${s.session_key}`).catch(() => []) : Promise.resolve([]),
-        isRace ? fetchJSON(`${BASE}/laps?session_key=${s.session_key}&driver_number=${driverNumber}`).catch(() => []) : Promise.resolve([]),
-        (isQuali || isPrac) ? fetchJSON(`${BASE}/laps?session_key=${s.session_key}`).catch(() => []) : Promise.resolve([])
+        fetchJSON(`${BASE}/laps?session_key=${s.session_key}`).catch(() => [])
       ]);
+      const myRaceLaps = allSessionLaps.filter(l => l.driver_number === driverNumber);
 
       const meeting = allMeetings.find(m => m.meeting_key === s.meeting_key);
       const roundText = meeting ? (meeting.is_testing ? 'TEST' : `RW${meeting.race_week}`) : '';
@@ -2516,6 +2589,21 @@ async function openDriverProfile(driverNumber) {
         else formattedPos = myPos + "th";
       }
 
+      let hasFL = false;
+      if (isRace && allSessionLaps.length > 0) {
+          const validLaps = allSessionLaps.filter(l => l.lap_duration && l.lap_duration > 0 && !l.is_pit_out_lap && !l.is_pit_in_lap);
+          if (validLaps.length > 0) {
+              const bestLap = Math.min(...validLaps.map(l => l.lap_duration));
+              const myValidLaps = myRaceLaps.filter(l => l.lap_duration && l.lap_duration > 0 && !l.is_pit_out_lap && !l.is_pit_in_lap);
+              if (myValidLaps.length > 0) {
+                  const myBest = Math.min(...myValidLaps.map(l => l.lap_duration));
+                  if (myBest === bestLap && bestLap > 0 && myBest < Infinity) hasFL = true;
+              }
+          }
+      }
+      const flBadgeHtml = hasFL ? `<div style="font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; font-weight:800; color:#c87eff; background:rgba(150,0,230,0.15); padding:1px 5px; border-radius:2px; line-height:1.2;">FL</div>` : '';
+      
+
       const posClass = myPos === 1 ? 'p1' : myPos === 2 ? 'p2' : myPos === 3 ? 'p3' : '';
       const meetingKeyId = meeting ? meeting.meeting_key : null;
 
@@ -2538,14 +2626,22 @@ async function openDriverProfile(driverNumber) {
 
             <div style="display:flex; flex-direction:column; align-items:center;">
               <span style="font-size:0.55rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px; font-family:'Barlow Condensed', sans-serif;">Finish</span>
-              <div class="driver-pos ${posClass}" style="font-size: 1.25rem; line-height: 1;">${formattedPos}</div>
+              <div class="driver-pos ${posClass}" style="font-size: 1.25rem; line-height: 1; position: relative;">
+                <div style="position: absolute; right: 100%; top: 50%; transform: translateY(-50%); padding-right: 6px; display: flex; align-items: center;">
+                  ${getTrophyHtml(myPos, '18px', false)}
+                </div>
+                ${formattedPos}
+              </div>
             </div>
 
             ${isRace ? `
             <div style="min-width: 4rem; display:flex; flex-direction:column; align-items:flex-end;">
               <span style="font-size:0.55rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px; font-family:'Barlow Condensed', sans-serif;">Points Gained</span>
-              <div class="driver-pts-gained${ptsGained === 0 ? ' zero' : ''}" style="display:inline-block; font-size:0.9rem; padding: 2px 6px;">
-                ${ptsGained > 0 ? '+' : ''}${ptsGained}
+              <div style="display:flex; align-items:center; gap:6px;">
+                ${flBadgeHtml}
+                <div class="driver-pts-gained${ptsGained === 0 ? ' zero' : ''}" style="display:inline-block; font-size:0.9rem; padding: 2px 6px;">
+                  ${ptsGained > 0 ? '+' : ''}${ptsGained}
+                </div>
               </div>
             </div>` : ''}
           </div>
@@ -2652,7 +2748,10 @@ function updateDriverHeader(elementId, driverObj) {
   if (!target || !driverObj) return;
 
   const tc = teamColor(driverObj.team_name);
-  const countryCode = driverObj.country_code || '';
+  
+  // THE FIX: Use our new fallback map if the API forgets the country code!
+  const acronym = driverObj.name_acronym || '';
+  const countryCode = driverObj.country_code || DRIVER_COUNTRY_FALLBACK[acronym] || '';
   const iso2 = countryToIso2[countryCode] || '';
   
   // Try to build a flag, otherwise build a text tag
