@@ -988,39 +988,28 @@ async function renderSessionStints(containerId) {
     ]);
 
     const maxLaps = laps.length > 0 ? Math.max(...laps.map(l => l.lap_number || 0)) : 1;
+    const lapRange = Math.max(1, maxLaps - 1);
+    
     const leaderLaps = laps.filter(l => l.driver_number === orderedDriversList[0].driver_number);
     const scPeriods = await getSafetyCarPeriods(currentSession.session_key, leaderLaps);
     
-    // --- NEW: Conditionally render Track Status ---
-    let scTrackHtml = '';
-    let trackStatusRowHtml = '';
+    const isLight = document.body.dataset.theme === 'light';
+    const scOverlayColor = isLight ? 'rgba(255, 204, 0, 0.45)' : 'rgba(255, 204, 0, 0.2)';
+    const vscOverlayColor = isLight ? 'rgba(255, 102, 0, 0.45)' : 'rgba(255, 102, 0, 0.2)';
     
+    // Create the global overlay bars
+    let globalScBarsHtml = '';
     if (scPeriods.length > 0) {
-      scTrackHtml = `<div style="position:relative; width:100%; height:16px; background:var(--surface2); border-radius:3px; overflow:hidden;">`;
       scPeriods.forEach(p => {
-          const leftPct = ((p.startLap - 1) / maxLaps) * 100;
-          const widthPct = ((p.endLap - p.startLap) / maxLaps) * 100;
+          const leftPct = ((p.startLap - 1) / lapRange) * 100;
+          const widthPct = ((p.endLap - p.startLap) / lapRange) * 100;
           const isSC = p.type === 'SC';
-          const color1 = isSC ? '#ffcc00' : '#ff6600'; // Yellow SC, Orange VSC
-          const color2 = '#222222';
-          const bg = `repeating-linear-gradient(45deg, ${color1}, ${color1} 6px, ${color2} 6px, ${color2} 12px)`;
+          const color = isSC ? scOverlayColor : vscOverlayColor;
+          const borderCol = isSC ? '#ffcc00' : '#ff6600';
           
-          scTrackHtml += `<div style="position:absolute; left:${leftPct}%; width:${widthPct}%; height:100%; background:${bg}; border-left: 2px solid ${color1}; border-right: 2px solid ${color1}; display:flex; align-items:center; justify-content:center; box-shadow: 0 0 5px rgba(0,0,0,0.5);">
-              <span style="background:#000; color:${color1}; font-size:0.6rem; font-weight:900; padding:0 4px; border-radius:2px; line-height:1.2;">${p.type}</span>
-          </div>`;
+          globalScBarsHtml += `<div style="position:absolute; top:-0.5rem; bottom:-0.5rem; left:${leftPct}%; width:${widthPct}%; background:${color}; border-left: 1px solid ${borderCol}; border-right: 1px solid ${borderCol}; pointer-events:none; z-index:5;"></div>`;
       });
-      scTrackHtml += `</div>`;
-
-      trackStatusRowHtml = `
-        <div class="stint-row" style="grid-template-columns: 5rem 1fr; margin-bottom: 1rem; height: auto;">
-          <div style="display:flex; align-items:center; justify-content:flex-end;">
-            <span style="font-size:0.65rem; font-weight:700; color:var(--text-dim); font-family:'Barlow Condensed', sans-serif; text-transform:uppercase;">Track Status</span>
-          </div>
-          <div>${scTrackHtml}</div>
-        </div>
-      `;
     }
-    // ----------------------------------------------
 
     const driverStints = {};
     stints.forEach(s => {
@@ -1030,9 +1019,8 @@ async function renderSessionStints(containerId) {
 
     let html = `<div style="padding: 1.5rem 0;">`;
     
-    // Inject dynamic Legend if needed
     html += `
-      <div style="display: grid; grid-template-columns: 5rem 1fr; gap: 1rem; margin-bottom: 0.5rem;">
+      <div style="display: grid; grid-template-columns: 5.5rem 1fr; gap: 1rem; margin-bottom: 0.5rem;">
         <div></div>
         <div class="standings-title" style="display:flex; justify-content:space-between;">
           <span>Race Strategy ${scPeriods.length > 0 ? `<span style="color:#ffcc00; margin-left:10px; font-weight:900;">█ SC</span> <span style="color:#ff6600; margin-left:5px; font-weight:900;">█ VSC</span>` : ''}</span>
@@ -1041,7 +1029,12 @@ async function renderSessionStints(containerId) {
       </div>
     `;
 
-    html += trackStatusRowHtml;
+    // Wrapper for ALL rows + The massive absolute SC overlay
+    html += `<div style="position:relative;">`;
+    if (scPeriods.length > 0) {
+        // Grid column 2 (1fr) starts at exactly 6.5rem (5.5rem + 1rem gap)
+        html += `<div style="position:absolute; top:0; bottom:0; left:6.5rem; right:0; pointer-events:none; z-index:5;">${globalScBarsHtml}</div>`;
+    }
 
     orderedDriversList.forEach(driver => {
       const dn = driver.driver_number;
@@ -1053,46 +1046,54 @@ async function renderSessionStints(containerId) {
       if (dStints.length === 0) {
         trackHtml = `<div style="font-size:0.75rem; color:var(--text-dim); padding-left:0.5rem; display:flex; align-items:center;">No tire data</div>`;
       } else {
-        dStints.forEach(stint => {
-          const stintLength = (stint.lap_end - stint.lap_start) + 1;
-          const widthPct = (stintLength / maxLaps) * 100;
+        dStints.forEach((stint, idx) => {
+          // Close the gap between stints for seamless visuals
+          let startPoint = stint.lap_start - 1;
+          let endPoint = stint.lap_end - 1;
+          if (idx < dStints.length - 1) {
+              const nextStint = dStints[idx + 1];
+              endPoint = (stint.lap_end - 1 + nextStint.lap_start - 1) / 2;
+          } else {
+              endPoint = maxLaps - 1;
+          }
+
+          const widthPct = ((endPoint - startPoint) / lapRange) * 100;
           const rawCompound = stint.compound ? stint.compound.toUpperCase() : 'MEDIUM';
           const compoundClass = `tire-${rawCompound}`;
-          const tireLabel = rawCompound[0]; // Will correctly grab 'M'
+          const tireLabel = rawCompound[0]; 
           
           if (widthPct > 0) {
-            trackHtml += `<div class="tire-bar ${compoundClass}" style="width: ${widthPct}%" title="${stint.compound} (${stintLength} Laps)">${tireLabel}</div>`;
+            trackHtml += `<div class="tire-bar ${compoundClass}" style="width: ${widthPct}%" title="${stint.compound} (${stint.lap_end - stint.lap_start} Laps)">${tireLabel}</div>`;
           }
         });
       }
 
       html += `
-        <div class="stint-row" style="grid-template-columns: 5.5rem 1fr; cursor:pointer; transition: opacity 0.15s;" 
+        <div class="stint-row" style="grid-template-columns: 5.5rem 1fr; cursor:pointer; position:relative; z-index:1; transition: opacity 0.15s;" 
              onclick="previousView='view-drivers'; viewDriverDetails(${dn}); setTimeout(() => switchDriverSubTab('tire-strategy'), 50);"
              onmouseover="this.style.opacity='0.75'" 
              onmouseout="this.style.opacity='1'">
           <div style="display:flex; align-items:center; justify-content:flex-end; gap:0.5rem;">
             <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted); font-family:'Barlow Condensed', sans-serif;">${driver.position || '-'}</span>
-            
             <div class="driver-num-badge" style="background:${tc.bg}; color:${tc.text}; width:68px; flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:center; gap:6px;">
               ${getTeamLogoHtml(driver.team_name, '10px', tc.text)}
               <span style="font-size:0.85rem; letter-spacing:0.05em;">${acronym}</span>
             </div>
-            
           </div>
-          <div class="stint-track">${trackHtml}</div>
+          <div class="stint-track" style="position:relative;">
+            ${trackHtml}
+          </div>
         </div>
       `;
     });
 
-    html += `</div>`; 
+    html += `</div></div>`; 
     container.innerHTML = html;
 
   } catch (e) {
     container.innerHTML = `<div class="error-msg">Could not load strategy data. ${e.message}</div>`;
   }
 }
-
 
 async function getPitStopData(sessionKey, driverNumber = null) {
   const allStops = await fetchJSON(`${BASE}/pit_stops?session_key=${sessionKey}`).catch(() => []);
@@ -2252,16 +2253,11 @@ const dnfStatHtml = isRace ? `<div class="stat"><div class="stat-label">DNF / DN
 async function viewDriverDetails(driverNumber) {
   currentDriverView = driverNumber; 
 
-  // --- 1. SESSION TAB PERSISTENCE ---
-  // Save the currently active session subtab (Results, Pit Stops, or Lap Chart)
-  // so we can correctly reload it when the user clicks 'Back'
   const activeSessionTab = document.querySelector('#subtabs-container .subtab-btn.active');
   const sessionTabId = activeSessionTab ? activeSessionTab.id.replace('subtab-btn-', '') : 'results';
   
   showView('view-driver-detail');   
   
-  // --- 2. QUICK SWITCHER DROPDOWNS & TABS ---
-  // A. Driver Switcher
   const switcher = document.getElementById('detail-driver-switcher');
   if (switcher && orderedDriversList.length > 0) {
     switcher.innerHTML = orderedDriversList.map(d => 
@@ -2271,7 +2267,6 @@ async function viewDriverDetails(driverNumber) {
     ).join('');
   }
 
-  // B. Meeting Switcher
   const meetingSwitcher = document.getElementById('detail-meeting-switcher');
   if (meetingSwitcher) {
     let options = '';
@@ -2287,7 +2282,6 @@ async function viewDriverDetails(driverNumber) {
     meetingSwitcher.innerHTML = options;
   }
 
-  // C. Session Tabs
   const sessionTabsContainer = document.getElementById('driver-detail-session-tabs');
   if (sessionTabsContainer && currentMeeting) {
     fetchJSON(`${BASE}/sessions?meeting_key=${currentMeeting.meeting_key}`).then(sessions => {
@@ -2300,18 +2294,14 @@ async function viewDriverDetails(driverNumber) {
     });
   }
 
-  // --- 3. DATA PERSISTENCE CHECK ---
   let driverObj = orderedDriversList.find(d => d.driver_number === driverNumber);
   if (!driverObj) {
-    // Fallback: Fetch the full list for this session if the global list is empty
     const sessionDrivers = await fetchJSON(`${BASE}/drivers?session_key=${currentSession.session_key}`);
     orderedDriversList = sessionDrivers;
     driverObj = orderedDriversList.find(d => d.driver_number === driverNumber);
   }
 
-  // Update consistent Athlete Badge header
   updateDriverHeader('detail-driver-title', driverObj);
-  // NEW: Make the location/session text a clickable link to the main Race Weekend page
   const subText = `${currentMeeting.location} &middot; ${getShortSessionName(currentSession.session_name)}`;
   document.getElementById('detail-driver-sub').innerHTML = `
     <span onclick="selectMeeting(${currentMeeting.meeting_key})" 
@@ -2322,16 +2312,12 @@ async function viewDriverDetails(driverNumber) {
     </span>
   `;
 
-  // Show/hide Positions Gained/Lost tab based on session type
   updateDriverSubTabsForSession();
 
-  // --- 4. AUTO-TAB SYNC ---
-  // Detects which sub-tab was open in the driver view and refreshes it
   const activeSubTab = document.querySelector('#driver-subtabs-container .subtab-btn.active');
   const activeTabId = activeSubTab ? activeSubTab.id.replace('driver-subtab-btn-', '') : 'tire-strategy';
   switchDriverSubTab(activeTabId);
 
-  // --- 5. BACK BUTTON LOGIC ---
   const backBtn = document.getElementById('driver-detail-back-btn');
   if (backBtn) {
     if (previousView === 'view-driver-profile') {
@@ -2339,7 +2325,6 @@ async function viewDriverDetails(driverNumber) {
       backBtn.onclick = () => showView('view-driver-profile');
     } else {
       backBtn.textContent = '← Back to Results';
-      // When going back, explicitly re-run switchSubTab to ensure the Lap Chart re-renders
       backBtn.onclick = () => {
         showView('view-drivers');
         switchSubTab(sessionTabId);
@@ -2347,13 +2332,27 @@ async function viewDriverDetails(driverNumber) {
     }
   }
 
-  // --- 6. DATA LOADING UI ---
-  const wrapper = document.getElementById('detail-stint-track').parentElement;
-  const titleElement = wrapper.previousElementSibling; 
+  // --- 6. UNIFIED DATA LOADING UI ---
+  const stratContainer = document.getElementById('driver-subtab-content-tire-strategy');
+  stratContainer.innerHTML = `
+    <div id="detail-strategy-title" class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+      <span>Race Strategy</span>
+      <span>Total Laps: --</span>
+    </div>
+    <div style="position: relative; width: 100%;">
+      <div id="sc-master-overlay" style="position: absolute; top: 0; bottom: 28px; left: 0; pointer-events: none; z-index: 5;"></div>
 
-  wrapper.innerHTML = `
-    <div id="detail-sc-track" style="position:relative; width:100%; height:12px; background:var(--surface2); border-radius:2px; overflow:hidden; margin-bottom:4px; display:none;"></div>
-    <div class="stint-track" id="detail-stint-track" style="height:28px;"><div class="spinner" style="margin:auto; width:16px; height:16px;"></div></div>
+      <div style="width: 100%; position: relative; margin-bottom: 2.5rem; z-index: 1;">
+        <div class="stint-track" id="detail-stint-track" style="height: 28px; border-radius: 4px; overflow: hidden; position: relative; background: var(--surface2);">
+          <div class="spinner" style="margin:auto; width:16px; height:16px;"></div>
+        </div>
+      </div>
+
+      <div class="standings-title" style="margin-bottom: 0.5rem; position: relative; z-index: 10;">Pace Analysis</div>
+      <div style="position: relative; height: 400px; width: 100%; z-index: 10;">
+        <canvas id="lapTimeChart"></canvas>
+      </div>
+    </div>
   `;
   
   try {
@@ -2363,35 +2362,37 @@ async function viewDriverDetails(driverNumber) {
     ]);
 
     const totalLaps = laps.length > 0 ? laps[laps.length - 1].lap_number : 1;
+    const lapRange = Math.max(1, totalLaps - 1); // Used for perfect chart alignment
     const scPeriods = await getSafetyCarPeriods(currentSession.session_key, laps);
     
-    // Inject the Legend & Total Laps
+    const titleElement = document.getElementById('detail-strategy-title');
     if (titleElement) {
       let legendHtml = '';
       if (scPeriods.length > 0) {
         legendHtml = `<span style="color:#ffcc00; margin-left:10px; font-weight:900;">█ SC</span> <span style="color:#ff6600; margin-left:5px; font-weight:900;">█ VSC</span>`;
       }
-      titleElement.style.display = 'flex';
-      titleElement.style.justifyContent = 'space-between';
       titleElement.innerHTML = `<span>Race Strategy ${legendHtml}</span><span>Total Laps: ${totalLaps}</span>`;
     }
 
-    // Safety Car Overlay
-    const scTrackContainer = document.getElementById('detail-sc-track');
+    // Safety Car Overlay styling
+    const isLight = document.body.dataset.theme === 'light';
+    const scOverlayColor = isLight ? 'rgba(255, 204, 0, 0.45)' : 'rgba(255, 204, 0, 0.2)';
+    const vscOverlayColor = isLight ? 'rgba(255, 102, 0, 0.45)' : 'rgba(255, 102, 0, 0.2)';
+    
+    let scBarsHtml = '';
     if (scPeriods.length > 0) {
-      let scBarsHtml = '';
       scPeriods.forEach(p => {
-          const leftPct = ((p.startLap - 1) / totalLaps) * 100;
-          const widthPct = ((p.endLap - p.startLap) / totalLaps) * 100;
+          const leftPct = ((p.startLap - 1) / lapRange) * 100;
+          const widthPct = ((p.endLap - p.startLap) / lapRange) * 100;
           const isSC = p.type === 'SC';
-          const color1 = isSC ? '#ffcc00' : '#ff6600';
-          const color2 = '#222222';
-          const bg = `repeating-linear-gradient(45deg, ${color1}, ${color1} 4px, ${color2} 4px, ${color2} 8px)`;
-          scBarsHtml += `<div style="position:absolute; left:${leftPct}%; width:${widthPct}%; height:100%; background:${bg}; border-left: 1px solid ${color1}; border-right: 1px solid ${color1};"></div>`;
+          const color = isSC ? scOverlayColor : vscOverlayColor;
+          const borderCol = isSC ? '#ffcc00' : '#ff6600';
+          scBarsHtml += `<div style="position:absolute; left:${leftPct}%; width:${widthPct}%; height:100%; background:${color}; border-left: 1px solid ${borderCol}; border-right: 1px solid ${borderCol}; pointer-events:none;"></div>`;
       });
-      scTrackContainer.innerHTML = scBarsHtml;
-      scTrackContainer.style.display = 'block'; 
     }
+
+    const scMaster = document.getElementById('sc-master-overlay');
+    if (scMaster) scMaster.innerHTML = scBarsHtml;
 
     // Tire Stint Track
     const stintTrack = document.getElementById('detail-stint-track');
@@ -2399,22 +2400,29 @@ async function viewDriverDetails(driverNumber) {
       stintTrack.innerHTML = `<div style="color:var(--text-dim); padding:0.5rem; text-align:center; font-size:0.8rem;">No tire data available</div>`;
     } else {
       let trackHtml = '';
-      stints.forEach(stint => {
-        const stintLength = (stint.lap_end - stint.lap_start) + 1;
-        const widthPct = (stintLength / totalLaps) * 100;
+      stints.forEach((stint, idx) => {
+        let startPoint = stint.lap_start - 1;
+        let endPoint = stint.lap_end - 1;
+        if (idx < stints.length - 1) {
+           const nextStint = stints[idx + 1];
+           endPoint = (stint.lap_end - 1 + nextStint.lap_start - 1) / 2;
+        } else {
+           endPoint = totalLaps - 1;
+        }
+        
+        const widthPct = ((endPoint - startPoint) / lapRange) * 100;
         const rawCompound = stint.compound ? stint.compound.toUpperCase() : 'MEDIUM';
         const compoundClass = `tire-${rawCompound}`;
         const tireLabel = rawCompound[0];
         
         if (widthPct > 0) {
-          trackHtml += `<div class="tire-bar ${compoundClass}" style="width: ${widthPct}%" title="${stint.compound} (${stintLength} Laps)">${tireLabel}</div>`;
+          trackHtml += `<div class="tire-bar ${compoundClass}" style="width: ${widthPct}%" title="${stint.compound} (${stint.lap_end - stint.lap_start} Laps)">${tireLabel}</div>`;
         }
       });
-      stintTrack.innerHTML = trackHtml;
+      stintTrack.innerHTML = trackHtml; // SC bars moved entirely to the master overlay
     }
 
     // --- 7. CHART PREPARATION ---
-    // THE FIX: Strip out the in-laps here too!
     const validLaps = laps.filter(l => l.lap_duration && l.lap_duration > 0 && !l.is_pit_out_lap && !l.is_pit_in_lap);
     if (validLaps.length === 0) {
       if (driverChartInstance) driverChartInstance.destroy();
@@ -2428,7 +2436,6 @@ async function viewDriverDetails(driverNumber) {
     const chartLabels = Array.from({length: totalLaps}, (_, i) => `Lap ${i + 1}`);
     const chartData = Array(totalLaps).fill(null);
     
-    const isLight = document.body.dataset.theme === 'light';
     const hardColor = isLight ? '#aaaaaa' : '#ffffff'; 
     const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
     const tickColor = isLight ? '#666666' : '#888888';
@@ -2442,7 +2449,6 @@ async function viewDriverDetails(driverNumber) {
       chartData[idx] = l.lap_duration;
       
       let currentStint = stints.find(s => l.lap_number >= s.lap_start && l.lap_number <= s.lap_end);
-      // THE FIX: Default missing chart dots to MEDIUM
       const compound = currentStint ? (currentStint.compound || 'MEDIUM').toUpperCase() : 'MEDIUM';
       if (compound === 'SOFT') pointColors[idx] = '#ff3333';
       else if (compound === 'MEDIUM') pointColors[idx] = '#ffd12b';
@@ -2455,15 +2461,15 @@ async function viewDriverDetails(driverNumber) {
       id: 'syncBar',
       afterLayout: (chart) => {
         const track = document.getElementById('detail-stint-track');
-        const scTrack = document.getElementById('detail-sc-track');
+        const scMaster = document.getElementById('sc-master-overlay');
         if (chart.chartArea) {
           if (track) {
             track.style.marginLeft = chart.chartArea.left + 'px';
             track.style.width = (chart.chartArea.right - chart.chartArea.left) + 'px';
           }
-          if (scTrack) {
-            scTrack.style.marginLeft = chart.chartArea.left + 'px';
-            scTrack.style.width = (chart.chartArea.right - chart.chartArea.left) + 'px';
+          if (scMaster) {
+            scMaster.style.marginLeft = chart.chartArea.left + 'px';
+            scMaster.style.width = (chart.chartArea.right - chart.chartArea.left) + 'px';
           }
         }
       }
@@ -2474,7 +2480,7 @@ async function viewDriverDetails(driverNumber) {
 
     driverChartInstance = new Chart(ctx, {
       type: 'line',
-      plugins: [syncBarPlugin],
+      plugins: [syncBarPlugin], // Removed the old scChartPlugin!
       data: {
         labels: chartLabels,
         datasets: [{
