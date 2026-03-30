@@ -701,6 +701,17 @@ function teamColor(team) {
   return { bg: '#444', text: '#fff' };
 }
 
+// Global Helper: Cleanly format short team names
+function getShortTeamName(teamName) {
+  if (!teamName) return '';
+  // Protect Racing Bulls from the stripper!
+  if (teamName.includes('Racing Bulls') || teamName === 'RB') return 'Racing Bulls';
+  if (teamName.includes('Red Bull')) return 'Red Bull';
+  
+  // Strip out 'Racing' and 'Team' for everyone else
+  return teamName.replace('Racing', '').replace('Team', '').trim();
+}
+
 const apiCache = {}; 
 
 // Intercepts API calls to check our local static database first
@@ -878,6 +889,7 @@ function goHome() {
   updateBreadcrumb();
   showView('view-season');
   switchSeasonTab('weekends');
+  window.scrollTo(0, 0); // THE FIX: Instantly scroll back to the top!
 }
 
 function toggleTheme() {
@@ -969,6 +981,21 @@ function switchSeasonSummaryTab(tabId) {
   if (activeContent) activeContent.classList.add('active');
 
   if (tabId === 'engines') {
+    // Reset all violin plots to their collapsed, default state
+    document.querySelectorAll('[id^="engine-violin-"]').forEach(panel => {
+      panel.style.display = 'none';
+      panel.innerHTML = '';         
+    });
+    
+    if (typeof engineViolinCache !== 'undefined') {
+        for (let key in engineViolinCache) engineViolinCache[key] = false;
+    }
+
+    // THE FIX: Reset the top tile grid back to "All Engines" if the cache exists
+    if (typeof window.renderEngineTiles === 'function' && window.cachedEngineStats) {
+        window.renderEngineTiles(null);
+    }
+
     renderEngineSuppliers();
   }
 }
@@ -1440,12 +1467,12 @@ async function renderBoxWhisker(containerId, driverNumber) {
             svgContent += `<text x="${cx + 8}" y="${badgeY + 16}" text-anchor="middle" fill="${tc.text}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">${acronym}</text>`;
 
             // Text: Average & Gap
-            svgContent += `<text x="${cx}" y="${badgeY + 40}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="12" font-weight="700">Avg: ${fmtLapTime(d.mean)}</text>`;
+            svgContent += `<text x="${cx}" y="${badgeY + 42}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">Avg: ${fmtLapTime(d.mean)}</text>`;
 
             const gap = d.mean - bestMean;
             const gapText = gap === 0 ? 'Fastest' : `+${gap.toFixed(3)}s`;
             const gapColor = gap === 0 ? '#c87eff' : tickColor;
-            svgContent += `<text x="${cx}" y="${badgeY + 56}" text-anchor="middle" fill="${gapColor}" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="600">${gapText}</text>`;
+            svgContent += `<text x="${cx}" y="${badgeY + 58}" text-anchor="middle" fill="${gapColor}" font-family="Barlow Condensed,sans-serif" font-size="12" font-weight="600">${gapText}</text>`;
         });
 
         // The Brush Rect for Dragging
@@ -1923,9 +1950,9 @@ function getEngineForTeam(apiTeamName) {
 const ENGINE_COLORS = {
   'Mercedes': '#27F4D2',
   'Ferrari':  '#E8002D',
-  'Honda':    '#cc0000',
+  'Honda':    '#E5C600', // Changed to Yellow
   'RBPT / Ford': '#3671C6',
-  'Audi':     '#bb0000',
+  'Audi':     '#555555', // Changed to Dark Gray
 };
 
 function engineColor(eng) {
@@ -1934,48 +1961,149 @@ function engineColor(eng) {
 
 let engineSuppliersLoaded = false;
 
+window.cachedEngineStats = null;
+
+// --- NEW: Dedicated Render Function to handle the Tile Drilldown logic! ---
+window.renderEngineTiles = function(drilldownEngine) {
+    const wrapper = document.getElementById('engine-tiles-wrapper');
+    if (!wrapper || !window.cachedEngineStats) return;
+
+    const engineStats = window.cachedEngineStats;
+    const engines = Object.keys(engineStats).sort((a, b) => (engineStats[b].points || 0) - (engineStats[a].points || 0));
+
+    const ENGINE_LOGO_MAP = {
+      'Mercedes':    { logo: './assets/logos/Mercedes.svg',           invert: false },
+      'Ferrari':     { logo: './assets/logos/Ferrari-Scuderia-Logo.png', invert: false },
+      'Honda':       { logo: './assets/logos/aston-martin.png',        invert: true  },
+      'RBPT / Ford': { logo: './assets/logos/red-bull-racing.png',     invert: false },
+      'Audi':        { logo: './assets/logos/Audi.svg',                invert: true  },
+    };
+
+    let html = '';
+
+    if (!drilldownEngine) {
+        // OVERVIEW MODE: Render All Engine Suppliers
+        html += `<div style="display:grid; grid-template-columns: repeat(${engines.length}, 1fr); gap:1rem; margin-bottom:2.5rem;">`;
+        engines.forEach(eng => {
+            const s = engineStats[eng];
+            const color = engineColor(eng);
+            const logoInfo = ENGINE_LOGO_MAP[eng];
+
+            const logoHtml = logoInfo
+              ? `<img src="${logoInfo.logo}" class="${logoInfo.invert ? 'invert-dark' : ''}" style="height:28px; width:auto; max-width:48px; object-fit:contain; display:block; margin: 0 auto 0.6rem auto;">`
+              : '';
+
+            const teamList = Array.from(s.teams);
+            
+            // THE FIX: If there is only 1 customer team, go straight to their profile. Otherwise, drill down!
+            const onClick = teamList.length === 1 
+              ? `openTeamProfile('${teamList[0].replace(/'/g, "\\'")}')`
+              : `renderEngineTiles('${eng}')`;
+              
+            const hoverHtml = `cursor:pointer; transition: transform 0.15s, border-color 0.15s;`;
+            const hoverEvents = `onmouseover="this.style.borderColor='${color}88'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='${color}22'; this.style.transform='translateY(0)';"`;
+
+            html += `
+              <div style="background:var(--surface); border:2px solid ${color}22; border-top: 3px solid ${color}; border-radius:4px; padding:1.25rem 1rem; text-align:center; ${hoverHtml}" ${hoverEvents} onclick="${onClick}">
+                ${logoHtml}
+                <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; font-weight:900; text-transform:uppercase; color:var(--text); margin-bottom:0.75rem; letter-spacing:0.04em; line-height:1.1; white-space:nowrap;">${eng}</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.5rem;">
+                  <div>
+                    <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Wins</div>
+                    <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${s.wins}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Podiums</div>
+                    <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${s.podiums}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Pts</div>
+                    <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${s.points || 0}</div>
+                  </div>
+                </div>
+              </div>`;
+        });
+        html += `</div>`;
+    } else {
+        // DRILLDOWN MODE: Render Specific Customer Teams
+        const s = engineStats[drilldownEngine];
+        const teams = Array.from(s.teams).sort((a,b) => (s.teamStats[b].points || 0) - (s.teamStats[a].points || 0));
+
+        html += `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.02); margin-bottom: 1rem; border-radius: 4px;">
+            <div style="font-family:'Barlow Condensed'; font-size:0.9rem; font-weight:700; color:var(--text); text-transform:uppercase;">${drilldownEngine} Powered Teams</div>
+            <button class="theme-toggle" onclick="renderEngineTiles(null)" style="padding: 0.25rem 0.75rem; font-size:0.75rem; margin-bottom: 0;">← Back to All Engines</button>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(${teams.length}, 1fr); gap:1rem; margin-bottom:2.5rem;">`;
+
+        teams.forEach(teamName => {
+            const ts = s.teamStats[teamName];
+            const tColor = teamColor(teamName);
+            const safeName = teamName.replace(/'/g, "\\'");
+            const logoHtml = `<div style="height:28px; margin: 0 auto 0.6rem auto; display:flex; align-items:center; justify-content:center;">${getTeamLogoHtml(teamName, '28px')}</div>`;
+            const shortName = getShortTeamName(teamName);
+
+            const hoverHtml = `cursor:pointer; transition: transform 0.15s, border-color 0.15s;`;
+            const hoverEvents = `onmouseover="this.style.borderColor='${tColor.bg}88'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='${tColor.bg}22'; this.style.transform='translateY(0)';"`;
+
+            html += `
+              <div style="background:var(--surface); border:2px solid ${tColor.bg}22; border-top: 3px solid ${tColor.bg}; border-radius:4px; padding:1.25rem 1rem; text-align:center; ${hoverHtml}" ${hoverEvents} onclick="openTeamProfile('${safeName}')">
+                ${logoHtml}
+                <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; font-weight:900; text-transform:uppercase; color:var(--text); margin-bottom:0.75rem; letter-spacing:0.04em; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${teamName}">${shortName}</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.5rem;">
+                  <div>
+                    <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Wins</div>
+                    <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${ts.wins}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Podiums</div>
+                    <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${ts.podiums}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Pts</div>
+                    <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${ts.points || 0}</div>
+                  </div>
+                </div>
+              </div>`;
+        });
+        html += `</div>`;
+    }
+
+    wrapper.innerHTML = html;
+};
+
 async function renderEngineSuppliers() {
   const container = document.getElementById('season-engines-area');
   if (!container) return;
 
-  // Only fetch data once per session
   if (engineSuppliersLoaded) return;
-  engineSuppliersLoaded = false; // will set true after success
+  engineSuppliersLoaded = false;
 
   container.innerHTML = `<div class="loading"><div class="spinner"></div>Loading engine data...</div>`;
 
   try {
-    const pastMeetings = allMeetings.filter(m => !m.is_testing && new Date(m.date_end) < NOW)
-      .sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+    const allYearSessions = await fetchJSON(`${BASE}/sessions?year=${currentYear}`);
+    
+    const targetSessions = allYearSessions.filter(s => {
+      const n = (s.session_name || '').toLowerCase();
+      return (n === 'race' || n === 'sprint') && new Date(s.date_start) < NOW;
+    }).sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
 
-    if (pastMeetings.length === 0) {
+    if (targetSessions.length === 0) {
       container.innerHTML = `<div style="padding:2rem; color:var(--text-dim); text-align:center;">No completed races yet.</div>`;
       return;
     }
 
-    // Get latest race session key to fetch driver/team info
-    const lastMeeting = pastMeetings[pastMeetings.length - 1];
-    const latestSessions = await fetchJSON(`${BASE}/sessions?meeting_key=${lastMeeting.meeting_key}`);
-    const raceSession = latestSessions.filter(s => s.session_name.toLowerCase() === 'race').pop()
-      || latestSessions[latestSessions.length - 1];
+    const latestSession = targetSessions[targetSessions.length - 1];
 
-    const [allDrivers, champData, teamChampData] = await Promise.all([
-      fetchJSON(`${BASE}/drivers?session_key=${raceSession.session_key}`).catch(() => []),
-      fetchJSON(`${BASE}/championship_drivers?session_key=${raceSession.session_key}`).catch(() => []),
-      fetchJSON(`${BASE}/championship_teams?session_key=${raceSession.session_key}`).catch(() => []),
+    const [champData, teamChampData] = await Promise.all([
+      fetchJSON(`${BASE}/championship_drivers?session_key=${latestSession.session_key}`).catch(() => []),
+      fetchJSON(`${BASE}/championship_teams?session_key=${latestSession.session_key}`).catch(() => [])
     ]);
 
-    // Build engine → {wins, podiums, teams, points} from team standings + results
-    const engineStats = {}; // engine → {wins, podiums, points, teams: Set}
+    const engineStats = {};
 
-    const allYearSessions = await fetchJSON(`${BASE}/sessions?year=${currentYear}`);
-    const raceSessions = allYearSessions.filter(s => {
-      const n = s.session_name.toLowerCase();
-      return n === 'race' && new Date(s.date_start) < NOW;
-    });
-
-    // Tally wins/podiums per engine across all races
-    for (const s of raceSessions) {
+    for (const s of targetSessions) {
       const [results, sessionDrivers] = await Promise.all([
         fetchJSON(`${BASE}/session_result?session_key=${s.session_key}`).catch(() => []),
         fetchJSON(`${BASE}/drivers?session_key=${s.session_key}`).catch(() => []),
@@ -1987,107 +2115,84 @@ async function renderEngineSuppliers() {
         const teamName = driverTeamMap[r.driver_number];
         const eng = getEngineForTeam(teamName);
         if (!eng) return;
-        if (!engineStats[eng]) engineStats[eng] = { wins: 0, podiums: 0, teams: new Set() };
+        
+        // Ensure the engine and team sub-dictionaries exist
+        if (!engineStats[eng]) engineStats[eng] = { wins: 0, podiums: 0, points: 0, teams: new Set(), teamStats: {} };
         engineStats[eng].teams.add(teamName);
-        if (r.position === 1) engineStats[eng].wins++;
-        if (r.position <= 3) engineStats[eng].podiums++;
+        if (!engineStats[eng].teamStats[teamName]) engineStats[eng].teamStats[teamName] = { wins: 0, podiums: 0, points: 0 };
+
+        if (r.position === 1) {
+            engineStats[eng].wins++;
+            engineStats[eng].teamStats[teamName].wins++;
+        }
+        if (r.position && r.position <= 3) {
+            engineStats[eng].podiums++;
+            engineStats[eng].teamStats[teamName].podiums++;
+        }
       });
     }
 
-    // Also tally points from team championship
     teamChampData.forEach(t => {
       const eng = getEngineForTeam(t.team_name);
       if (!eng) return;
-      if (!engineStats[eng]) engineStats[eng] = { wins: 0, podiums: 0, teams: new Set() };
+      
+      if (!engineStats[eng]) engineStats[eng] = { wins: 0, podiums: 0, points: 0, teams: new Set(), teamStats: {} };
       engineStats[eng].teams.add(t.team_name);
+      if (!engineStats[eng].teamStats[t.team_name]) engineStats[eng].teamStats[t.team_name] = { wins: 0, podiums: 0, points: 0 };
+
+      engineStats[eng].teamStats[t.team_name].points = t.points_current || 0;
       engineStats[eng].points = (engineStats[eng].points || 0) + (t.points_current || 0);
     });
 
-    const engines = Object.keys(engineStats).sort((a, b) =>
-      (engineStats[b].points || 0) - (engineStats[a].points || 0)
-    );
+    window.cachedEngineStats = engineStats;
 
-    const isLight = document.body.dataset.theme === 'light';
-    const surfaceColor = isLight ? '#f8f8f6' : '#1a1a1a';
-    const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
-    const textColor = isLight ? '#444' : '#888';
-    const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
-
-    // ── HEADER: engine tiles ──────────────────────────────────
-    // Map engine → logo from its primary team
-    const ENGINE_LOGO_MAP = {
-      'Mercedes':    { logo: './assets/logos/Mercedes.svg',           invert: false },
-      'Ferrari':     { logo: './assets/logos/Ferrari-Scuderia-Logo.png', invert: false },
-      'Honda':       { logo: './assets/logos/aston-martin.png',        invert: true  },
-      'RBPT / Ford': { logo: './assets/logos/red-bull-racing.png',     invert: false },
-      'Audi':        { logo: './assets/logos/Audi.svg',                invert: true  },
-    };
-
-    let headerHtml = `<div style="display:grid; grid-template-columns: repeat(${engines.length}, 1fr); gap:1rem; margin-bottom:2.5rem;">`;
-    engines.forEach(eng => {
-      const s = engineStats[eng];
-      const color = engineColor(eng);
-      const logoInfo = ENGINE_LOGO_MAP[eng];
-      const logoHtml = logoInfo
-        ? `<img src="${logoInfo.logo}" class="${logoInfo.invert ? 'invert-dark' : ''}" style="height:28px; width:auto; max-width:48px; object-fit:contain; display:block; margin-bottom:0.6rem;">`
-        : '';
-
-      headerHtml += `
-        <div style="background:var(--surface); border:2px solid ${color}22; border-top: 3px solid ${color}; border-radius:4px; padding:1.25rem 1.5rem;">
-          ${logoHtml}
-          <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; font-weight:900; text-transform:uppercase; color:var(--text); margin-bottom:0.75rem; letter-spacing:0.04em; line-height:1.1;">${eng}</div>
-          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.5rem;">
-            <div>
-              <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Wins</div>
-              <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${s.wins}</div>
-            </div>
-            <div>
-              <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Podiums</div>
-              <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${s.podiums}</div>
-            </div>
-            <div>
-              <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Pts</div>
-              <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${s.points || 0}</div>
-            </div>
-          </div>
-        </div>`;
-    });
-    headerHtml += `</div>`;
-
-    // ── RACE ROWS ─────────────────────────────────────────────
-    let racesHtml = `<div class="standings-title" style="margin-bottom:1rem;">Race Weekend Performance</div>`;
+    let racesHtml = `<div class="standings-title" style="margin-bottom:1rem;">Session Performance</div>`;
     racesHtml += `<div style="display:flex; flex-direction:column; gap:0.5rem;" id="engine-races-list">`;
 
-    pastMeetings.forEach((m, idx) => {
+    targetSessions.forEach((s) => {
+      const m = allMeetings.find(meet => meet.meeting_key === s.meeting_key);
+      if (!m) return;
+
       const flagUrl = m.country_name
         ? `https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${getCountryCode(m.country_name)}.svg`
         : '';
       const flagHtml = flagUrl
         ? `<img src="${flagUrl}" style="width:20px; height:auto; border-radius:2px; box-shadow:0 1px 3px rgba(0,0,0,0.2); margin-right:8px; vertical-align:middle; display:inline-block;">`
         : '';
+        
       let cleanName = (m.meeting_official_name || m.meeting_name).replace(/FORMULA 1/i, '').trim().replace(/\s*\d{4}$/, '').trim();
+      
+      const isSprint = s.session_name.toLowerCase().includes('sprint');
+      const badgeHtml = isSprint ? `<span style="background:#E87D2B; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">SPRINT</span>` : '';
 
       racesHtml += `
         <div>
-          <div class="driver-row" style="grid-template-columns: 3rem 1fr; cursor:pointer;"
-               onclick="toggleEngineRaceViolins(${m.meeting_key}, this)">
+          <div class="driver-row" style="grid-template-columns: 3rem 1fr; cursor:pointer; text-align:left;"
+               onclick="toggleEngineRaceViolins(${s.session_key}, this)">
             <div style="font-family:'Barlow Condensed',sans-serif; color:var(--text-dim); font-weight:700; font-size:0.85rem;">Race ${m.race_week}</div>
             <div style="display:flex; flex-direction:column; justify-content:center;">
               <div style="font-weight:700; font-family:'Barlow Condensed',sans-serif; font-size:1.1rem; text-transform:uppercase; display:flex; align-items:center;">
-                ${flagHtml}${cleanName}
+                ${flagHtml}${cleanName} ${badgeHtml}
               </div>
               <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-                ${fmtDate(m.date_start)} – ${fmtDate(m.date_end)}
+                ${fmtDate(s.date_start)}
               </div>
             </div>
           </div>
-          <div id="engine-violin-${m.meeting_key}" style="display:none; margin-top:0.25rem; margin-bottom:0.5rem;"></div>
+          <div id="engine-violin-${s.session_key}" style="display:none; margin-top:0.25rem; margin-bottom:0.5rem;"></div>
         </div>`;
     });
 
     racesHtml += `</div>`;
 
-    container.innerHTML = headerHtml + racesHtml;
+    container.style.textAlign = 'left';
+    container.style.padding = '0';
+    container.style.color = 'var(--text)';
+    
+    // Inject the wrapper container, then trigger the tile renderer!
+    container.innerHTML = `<div id="engine-tiles-wrapper"></div>` + racesHtml;
+    window.renderEngineTiles(null);
+    
     engineSuppliersLoaded = true;
 
   } catch (e) {
@@ -2096,239 +2201,274 @@ async function renderEngineSuppliers() {
   }
 }
 
-// Track which race violin panels are open so we don't re-render
 const engineViolinCache = {};
 
-async function toggleEngineRaceViolins(meetingKey, rowEl) {
-  const panel = document.getElementById(`engine-violin-${meetingKey}`);
+window.sessionEngineDataCache = window.sessionEngineDataCache || {};
+
+async function toggleEngineRaceViolins(sessionKey, rowEl) {
+  const panel = document.getElementById(`engine-violin-${sessionKey}`);
   if (!panel) return;
 
   const isOpen = panel.style.display !== 'none';
   if (isOpen) {
+    // THE FIX: Save current scroll position to prevent the page from jumping when the accordion collapses
+    const currentScroll = window.scrollY;
     panel.style.display = 'none';
+    window.scrollTo(0, currentScroll);
     return;
   }
 
   panel.style.display = 'block';
 
-  // Already rendered
-  if (engineViolinCache[meetingKey]) return;
-  engineViolinCache[meetingKey] = true;
+  if (!window.sessionEngineDataCache[sessionKey]) {
+    panel.innerHTML = `<div class="loading"><div class="spinner"></div>Loading lap data...</div>`;
 
-  panel.innerHTML = `<div class="loading"><div class="spinner"></div>Loading lap data...</div>`;
+    try {
+      const [allLaps, sessionDrivers] = await Promise.all([
+        fetchJSON(`${BASE}/laps?session_key=${sessionKey}`).catch(() => []),
+        fetchJSON(`${BASE}/drivers?session_key=${sessionKey}`).catch(() => []),
+      ]);
 
-  try {
-    const sessions = await fetchJSON(`${BASE}/sessions?meeting_key=${meetingKey}`);
-    const raceSession = sessions.filter(s => s.session_name.toLowerCase() === 'race').pop();
-    if (!raceSession) {
-      panel.innerHTML = `<div class="error-msg">No race session found.</div>`;
+      const refDriver = sessionDrivers[0]?.driver_number;
+      const leaderLaps = refDriver ? allLaps.filter(l => l.driver_number === refDriver) : [];
+      const scPeriods = await getSafetyCarPeriods(sessionKey, leaderLaps).catch(()=>[]);
+
+      window.sessionEngineDataCache[sessionKey] = { allLaps, sessionDrivers, scPeriods };
+    } catch (e) {
+      console.error(e);
+      panel.innerHTML = `<div class="error-msg">Could not load data: ${e.message}</div>`;
       return;
     }
+  }
 
-    const [allLaps, allStints, sessionDrivers] = await Promise.all([
-      fetchJSON(`${BASE}/laps?session_key=${raceSession.session_key}`).catch(() => []),
-      fetchJSON(`${BASE}/stints?session_key=${raceSession.session_key}`).catch(() => []),
-      fetchJSON(`${BASE}/drivers?session_key=${raceSession.session_key}`).catch(() => []),
-    ]);
+  window.renderEngineRaceViolins(sessionKey, null);
+}
 
-    // Map driver → team → engine
-    const driverEngineMap = {};
-    const driverTeamMap = {};
-    sessionDrivers.forEach(d => {
-      driverTeamMap[d.driver_number] = d.team_name;
-      driverEngineMap[d.driver_number] = getEngineForTeam(d.team_name);
+// --- NEW: Dedicated Render Function to handle the Drilldown logic! ---
+window.renderEngineRaceViolins = function(sessionKey, drilldownEngine) {
+  const panel = document.getElementById(`engine-violin-${sessionKey}`);
+  if (!panel) return;
+  
+  const data = window.sessionEngineDataCache[sessionKey];
+  if (!data) return;
+
+  const { allLaps, sessionDrivers, scPeriods } = data;
+  const isSCLap = (lapNum) => scPeriods.some(p => lapNum >= Math.floor(p.startLap) && lapNum <= Math.ceil(p.endLap));
+
+  const driverEngineMap = {};
+  const driverTeamMap = {};
+  sessionDrivers.forEach(d => {
+    driverTeamMap[d.driver_number] = d.team_name;
+    driverEngineMap[d.driver_number] = getEngineForTeam(d.team_name);
+  });
+
+  const groupLaps = {};
+  const engineTeamCounts = {};
+
+  allLaps.forEach(l => {
+    if (!l.lap_duration || l.lap_duration <= 0 || l.is_pit_out_lap || l.is_pit_in_lap || isSCLap(l.lap_number)) return;
+
+    const team = driverTeamMap[l.driver_number];
+    const eng = driverEngineMap[l.driver_number];
+    if (!eng || !team) return;
+
+    if (!engineTeamCounts[eng]) engineTeamCounts[eng] = new Set();
+    engineTeamCounts[eng].add(team);
+
+    let groupKey;
+    if (drilldownEngine) {
+        if (eng !== drilldownEngine) return;
+        groupKey = team; // Group by TEAM
+    } else {
+        groupKey = eng;  // Group by ENGINE
+    }
+
+    if (!groupLaps[groupKey]) groupLaps[groupKey] = { times: [] };
+    groupLaps[groupKey].times.push(l.lap_duration);
+  });
+
+  function cleanTimes(times) {
+    const sorted = [...times].sort((a,b) => a-b);
+    const median = sorted[Math.floor(sorted.length/2)];
+    return sorted.filter(t => t <= median * 1.10 && t > 0);
+  }
+
+  const groups = Object.keys(groupLaps).filter(g => groupLaps[g].times.length > 2);
+  if (groups.length === 0) {
+    panel.innerHTML = `<div style="padding:1rem; color:var(--text-dim);">No clean lap data available.</div>`;
+    return;
+  }
+
+  const stats = {};
+  let globalMin = Infinity, globalMax = -Infinity;
+
+  groups.forEach(g => {
+    const clean = cleanTimes(groupLaps[g].times);
+    if (clean.length === 0) return;
+    const mean = clean.reduce((a,b) => a+b,0) / clean.length;
+    const sorted = [...clean];
+    stats[g] = {
+      times: clean,
+      mean,
+      median: sorted[Math.floor(sorted.length/2)],
+      q1: sorted[Math.floor(sorted.length*0.25)],
+      q3: sorted[Math.floor(sorted.length*0.75)],
+      min: sorted[0],
+      max: sorted[sorted.length-1],
+    };
+    globalMin = Math.min(globalMin, sorted[0]);
+    globalMax = Math.max(globalMax, sorted[sorted.length-1]);
+  });
+
+  const validGroups = groups.filter(g => stats[g]).sort((a,b) => stats[a].mean - stats[b].mean);
+  const bestMean = stats[validGroups[0]]?.mean || 0;
+
+  const isLight = document.body.dataset.theme === 'light';
+  const surfaceColor = isLight ? '#f8f8f6' : '#1a1a1a';
+  const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+  const tickColor = isLight ? '#444' : '#888';
+  const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+
+  const yPad = (globalMax - globalMin) * 0.1 || 1;
+  const yMin = globalMin - yPad;
+  const yMax = globalMax + yPad;
+
+  const svgViewW = 1000;
+  const LEFT_PAD = 80;
+  const RIGHT_PAD = 20;
+  const TOP_PAD = 20;
+  const BOTTOM_PAD = drilldownEngine ? 80 : 100; // Increased padding for larger text!
+  const CHART_H = 320;
+  const svgHeight = CHART_H + TOP_PAD + BOTTOM_PAD;
+
+  const availW = svgViewW - LEFT_PAD - RIGHT_PAD;
+  const step = availW / validGroups.length;
+  const BOX_W = Math.min(step * 0.75, 140); // Auto-sizing width, capped at 140px
+
+  function yPx(val) {
+    return TOP_PAD + (1 - (val - yMin) / (yMax - yMin)) * CHART_H;
+  }
+
+  function gaussianKDE(x, data, bw) {
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = (x - data[i]) / bw;
+      sum += Math.exp(-0.5 * v * v);
+    }
+    return sum / (data.length * bw * Math.sqrt(2 * Math.PI));
+  }
+
+  let svgContent = '';
+
+  const numTicks = 6;
+  for (let i = 0; i <= numTicks; i++) {
+    const val = yMin + (i / numTicks) * (yMax - yMin);
+    const y = yPx(val);
+    svgContent += `<line x1="${LEFT_PAD}" y1="${y}" x2="${svgViewW - RIGHT_PAD}" y2="${y}" stroke="${gridColor}" stroke-width="1"/>`;
+    svgContent += `<text x="${LEFT_PAD - 6}" y="${y + 4}" text-anchor="end" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="11">${fmtLapTime(val)}</text>`;
+  }
+
+  validGroups.forEach((g, i) => {
+    const s = stats[g];
+    const color = drilldownEngine ? teamColor(g).bg : engineColor(g);
+    
+    // Center of the group's allocated column
+    const cx = LEFT_PAD + (i * step) + (step / 2);
+
+    const hasCustomers = !drilldownEngine && engineTeamCounts[g] && engineTeamCounts[g].size > 1;
+    
+    const groupProps = hasCustomers ? `cursor="pointer" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'" style="transition: opacity 0.2s;" onclick="renderEngineRaceViolins(${sessionKey}, '${g}')"` : '';
+
+    svgContent += `<g ${groupProps}>`;
+
+    const bw = 0.4;
+    const steps = 100;
+    const stepSize = (yMax - yMin) / steps;
+    const densities = [];
+    let maxDensity = 0;
+    for (let j = 0; j <= steps; j++) {
+      const v = yMin + j * stepSize;
+      const d = gaussianKDE(v, s.times, bw);
+      densities.push({ v, d });
+      if (d > maxDensity) maxDensity = d;
+    }
+
+    let pathD = '';
+    for (let j = 0; j <= steps; j++) {
+      const pt = densities[j];
+      const px = cx + (pt.d / maxDensity) * (BOX_W / 2);
+      const py = yPx(pt.v);
+      pathD += j === 0 ? `M ${px} ${py} ` : `L ${px} ${py} `;
+    }
+    for (let j = steps; j >= 0; j--) {
+      const pt = densities[j];
+      const px = cx - (pt.d / maxDensity) * (BOX_W / 2);
+      const py = yPx(pt.v);
+      pathD += `L ${px} ${py} `;
+    }
+    pathD += 'Z';
+    svgContent += `<path d="${pathD}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5"/>`;
+
+    s.times.forEach(t => {
+      const py = yPx(t);
+      const jitter = (Math.random() - 0.5) * (BOX_W * 0.35);
+      svgContent += `<circle cx="${cx + jitter}" cy="${py}" r="2" fill="${color}" opacity="0.6"/>`;
     });
 
-    // Map stints
-    const stintMap = {};
-    allStints.forEach(s => {
-      if (!stintMap[s.driver_number]) stintMap[s.driver_number] = [];
-      stintMap[s.driver_number].push(s);
-    });
+    const iqrW = 10;
+    svgContent += `<rect x="${cx - iqrW/2}" y="${yPx(s.q3)}" width="${iqrW}" height="${Math.max(1, yPx(s.q1) - yPx(s.q3))}" fill="${color}" stroke="${color}" stroke-width="1"/>`;
+    svgContent += `<circle cx="${cx}" cy="${yPx(s.median)}" r="4" fill="var(--bg)" stroke="${color}" stroke-width="2"/>`;
 
-    function isScLap(lapNum, scPeriods) {
-      return scPeriods.some(p => lapNum >= Math.floor(p.startLap) && lapNum <= Math.ceil(p.endLap));
+    let badgeText = drilldownEngine ? getShortTeamName(g) : g;
+    if (badgeText.length > 12) badgeText = badgeText.substring(0, 10) + '..';
+
+    const badgeY = svgHeight - BOTTOM_PAD + 12;
+    const badgeW = BOX_W;
+    const badgeH = 28; // Slightly taller box for the larger text
+    svgContent += `<rect x="${cx - badgeW/2}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="3" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5"/>`;
+    svgContent += `<text x="${cx}" y="${badgeY + 18}" text-anchor="middle" fill="${color}" font-family="Barlow Condensed,sans-serif" font-size="14" font-weight="800">${badgeText}</text>`;
+
+    svgContent += `<text x="${cx}" y="${badgeY + 44}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">Avg: ${fmtLapTime(s.mean)}</text>`;
+
+    const gap = s.mean - bestMean;
+    const gapText = gap < 0.001 ? 'Fastest' : `+${gap.toFixed(3)}s`;
+    const gapColor = gap < 0.001 ? '#c87eff' : tickColor;
+    svgContent += `<text x="${cx}" y="${badgeY + 60}" text-anchor="middle" fill="${gapColor}" font-family="Barlow Condensed,sans-serif" font-size="12" font-weight="600">${gapText}</text>`;
+
+    if (hasCustomers) {
+        svgContent += `<text x="${cx}" y="${badgeY + 80}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="10" font-weight="800" opacity="0.7">VIEW TEAMS ›</text>`;
     }
 
-    // Get SC periods for leader
-    const leaderLaps = allLaps.filter(l => {
-      const pos = sessionDrivers.find(d => d.driver_number === l.driver_number);
-      return pos;
-    }).filter(l => l.date_start).sort((a,b) => a.lap_number - b.lap_number);
+    svgContent += `</g>`;
+  });
 
-    // Build engine → [times] and engine → {drivers}
-    const engineLaps = {}; // engine → { times: [], driverTimes: {driverNum: []} }
+  // THE FIX: Secure Header Injection!
+  let headerHtml = '';
+  if (drilldownEngine) {
+      headerHtml = `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding: 0.6rem 1rem; border-bottom: 1px solid ${borderColor}; background: rgba(0,0,0,0.02);">
+          <div style="font-family:'Barlow Condensed'; font-size:0.9rem; font-weight:700; color:var(--text); text-transform:uppercase;">${drilldownEngine} Powered Teams</div>
+          <button class="theme-toggle" onclick="renderEngineRaceViolins(${sessionKey}, null)" style="padding: 0.25rem 0.75rem; font-size:0.75rem; margin-bottom: 0;">← Back to All Engines</button>
+      </div>
+      `;
+  } else {
+      headerHtml = `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding: 0.6rem 1rem; border-bottom: 1px solid ${borderColor}; background: rgba(0,0,0,0.02);">
+          <div style="font-family:'Barlow Condensed'; font-size:0.9rem; font-weight:700; color:var(--text); text-transform:uppercase;">All Engine Suppliers</div>
+      </div>
+      `;
+  }
 
-    allLaps.forEach(l => {
-      if (!l.lap_duration || l.lap_duration <= 0 || l.is_pit_out_lap) return;
-      const eng = driverEngineMap[l.driver_number];
-      if (!eng) return;
-      if (!engineLaps[eng]) engineLaps[eng] = { times: [], driverTimes: {} };
-      if (!engineLaps[eng].driverTimes[l.driver_number]) engineLaps[eng].driverTimes[l.driver_number] = [];
-      engineLaps[eng].times.push(l.lap_duration);
-      engineLaps[eng].driverTimes[l.driver_number].push(l.lap_duration);
-    });
-
-    // Clean outliers per engine
-    function cleanTimes(times) {
-      const sorted = [...times].sort((a,b) => a-b);
-      const median = sorted[Math.floor(sorted.length/2)];
-      return sorted.filter(t => t <= median * 1.12 && t > 0);
-    }
-
-    const engines = Object.keys(engineLaps).filter(e => engineLaps[e].times.length > 2);
-    if (engines.length === 0) {
-      panel.innerHTML = `<div style="padding:1rem; color:var(--text-dim);">No lap data available.</div>`;
-      return;
-    }
-
-    // Compute stats per engine
-    const engStats = {};
-    let globalMin = Infinity, globalMax = -Infinity;
-
-    engines.forEach(eng => {
-      const clean = cleanTimes(engineLaps[eng].times);
-      if (clean.length === 0) return;
-      const mean = clean.reduce((a,b) => a+b,0) / clean.length;
-      const sorted = [...clean];
-      engStats[eng] = {
-        times: clean,
-        mean,
-        median: sorted[Math.floor(sorted.length/2)],
-        q1: sorted[Math.floor(sorted.length*0.25)],
-        q3: sorted[Math.floor(sorted.length*0.75)],
-        min: sorted[0],
-        max: sorted[sorted.length-1],
-      };
-      globalMin = Math.min(globalMin, sorted[0]);
-      globalMax = Math.max(globalMax, sorted[sorted.length-1]);
-    });
-
-    const validEngines = engines.filter(e => engStats[e]).sort((a,b) => engStats[a].mean - engStats[b].mean);
-    const bestMean = engStats[validEngines[0]]?.mean || 0;
-
-    // SVG layout
-    const isLight = document.body.dataset.theme === 'light';
-    const surfaceColor = isLight ? '#f8f8f6' : '#1a1a1a';
-    const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
-    const tickColor = isLight ? '#444' : '#888';
-    const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
-
-    const yPad = (globalMax - globalMin) * 0.1 || 1;
-    const yMin = globalMin - yPad;
-    const yMax = globalMax + yPad;
-
-    const BOX_W = 100;
-    const BOX_GAP = 60;
-    const LEFT_PAD = 80;
-    const RIGHT_PAD = 20;
-    const TOP_PAD = 20;
-    const BOTTOM_PAD = 72;
-    const CHART_H = 320;
-
-    const svgWidth = LEFT_PAD + validEngines.length * (BOX_W + BOX_GAP) + RIGHT_PAD;
-    const svgHeight = CHART_H + TOP_PAD + BOTTOM_PAD;
-
-    function yPx(val) {
-      return TOP_PAD + (1 - (val - yMin) / (yMax - yMin)) * CHART_H;
-    }
-
-    function gaussianKDE(x, data, bw) {
-      let sum = 0;
-      for (let i = 0; i < data.length; i++) {
-        const v = (x - data[i]) / bw;
-        sum += Math.exp(-0.5 * v * v);
-      }
-      return sum / (data.length * bw * Math.sqrt(2 * Math.PI));
-    }
-
-    let svgContent = '';
-
-    // Y grid lines
-    const numTicks = 6;
-    for (let i = 0; i <= numTicks; i++) {
-      const val = yMin + (i / numTicks) * (yMax - yMin);
-      const y = yPx(val);
-      svgContent += `<line x1="${LEFT_PAD}" y1="${y}" x2="${svgWidth - RIGHT_PAD}" y2="${y}" stroke="${gridColor}" stroke-width="1"/>`;
-      svgContent += `<text x="${LEFT_PAD - 6}" y="${y + 4}" text-anchor="end" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="11">${fmtLapTime(val)}</text>`;
-    }
-
-    validEngines.forEach((eng, i) => {
-      const s = engStats[eng];
-      const color = engineColor(eng);
-      const cx = LEFT_PAD + i * (BOX_W + BOX_GAP) + BOX_W / 2 + BOX_GAP / 2;
-
-      // Violin curve via KDE
-      const bw = 0.4;
-      const steps = 100;
-      const stepSize = (yMax - yMin) / steps;
-      const densities = [];
-      let maxDensity = 0;
-      for (let j = 0; j <= steps; j++) {
-        const v = yMin + j * stepSize;
-        const d = gaussianKDE(v, s.times, bw);
-        densities.push({ v, d });
-        if (d > maxDensity) maxDensity = d;
-      }
-
-      let pathD = '';
-      for (let j = 0; j <= steps; j++) {
-        const pt = densities[j];
-        const px = cx + (pt.d / maxDensity) * (BOX_W / 2);
-        const py = yPx(pt.v);
-        pathD += j === 0 ? `M ${px} ${py} ` : `L ${px} ${py} `;
-      }
-      for (let j = steps; j >= 0; j--) {
-        const pt = densities[j];
-        const px = cx - (pt.d / maxDensity) * (BOX_W / 2);
-        const py = yPx(pt.v);
-        pathD += `L ${px} ${py} `;
-      }
-      pathD += 'Z';
-      svgContent += `<path d="${pathD}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5"/>`;
-
-      // Scatter dots
-      s.times.forEach(t => {
-        const py = yPx(t);
-        const jitter = (Math.random() - 0.5) * (BOX_W * 0.35);
-        svgContent += `<circle cx="${cx + jitter}" cy="${py}" r="2" fill="${color}" opacity="0.6"/>`;
-      });
-
-      // IQR box + median
-      const iqrW = 10;
-      svgContent += `<rect x="${cx - iqrW/2}" y="${yPx(s.q3)}" width="${iqrW}" height="${Math.max(1, yPx(s.q1) - yPx(s.q3))}" fill="${color}" stroke="${color}" stroke-width="1"/>`;
-      svgContent += `<circle cx="${cx}" cy="${yPx(s.median)}" r="4" fill="var(--bg)" stroke="${color}" stroke-width="2"/>`;
-
-      // Engine label badge
-      const badgeY = svgHeight - BOTTOM_PAD + 12;
-      const badgeW = BOX_W;
-      const badgeH = 26;
-      svgContent += `<rect x="${cx - badgeW/2}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="3" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5"/>`;
-      svgContent += `<text x="${cx}" y="${badgeY + 17}" text-anchor="middle" fill="${color}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="800">${eng}</text>`;
-
-      // Avg time
-      svgContent += `<text x="${cx}" y="${badgeY + 42}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="700">Avg: ${fmtLapTime(s.mean)}</text>`;
-
-      // Gap
-      const gap = s.mean - bestMean;
-      const gapText = gap < 0.001 ? 'Fastest' : `+${gap.toFixed(3)}s`;
-      const gapColor = gap < 0.001 ? '#c87eff' : tickColor;
-      svgContent += `<text x="${cx}" y="${badgeY + 56}" text-anchor="middle" fill="${gapColor}" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="600">${gapText}</text>`;
-    });
-
-    panel.innerHTML = `
-      <div style="background:${surfaceColor}; border:1px solid ${borderColor}; border-radius:4px; overflow-x:auto; margin-bottom:0.5rem;">
-        <svg width="${svgWidth}" height="${svgHeight}" style="display:block; min-width:${Math.min(svgWidth, 400)}px;">
+  panel.innerHTML = `
+    <div style="background:${surfaceColor}; border:1px solid ${borderColor}; border-radius:4px; overflow:hidden; margin-bottom:0.5rem;">
+      ${headerHtml}
+      <div style="overflow-x:auto; overflow-y:hidden;">
+        <svg viewBox="0 0 ${svgViewW} ${svgHeight}" width="100%" height="auto" style="display:block; min-height:400px; max-height:550px;">
           ${svgContent}
         </svg>
-      </div>`;
-
-  } catch (e) {
-    console.error(e);
-    panel.innerHTML = `<div class="error-msg">Could not load data: ${e.message}</div>`;
-    engineViolinCache[meetingKey] = false;
-  }
-}
+      </div>
+    </div>`;
+};
 
 async function loadSeason() {
   try {
@@ -2427,7 +2567,7 @@ async function loadStandings() {
       ${sortedTeams.map((t, i) => {
         const tc = teamColor(t.team_name);
         const posClass = i === 0 ? 'sp1' : i === 1 ? 'sp2' : i === 2 ? 'sp3' : '';
-        const shortName = (t.team_name || '').replace('Racing', '').replace('Team', '').trim();
+        const shortName = getShortTeamName(t.team_name);
         return `
           <div class="standings-row" style="cursor: pointer;" onclick="openTeamProfile('${t.team_name}')">
             <div class="s-pos ${posClass}">${t.position_current}</div>
@@ -2455,9 +2595,8 @@ async function loadStandings() {
 
 
         // Driver Leader Tile (Badge on left, Name & Points on RIGHT)
-        // Driver Leader Tile (Badge on left, Name & Points on RIGHT)
         const dTile = `
-          <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1.25rem; cursor:pointer; transition: transform 0.15s, border-color 0.15s;"
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:0.75rem 1.25rem; cursor:pointer; transition: transform 0.15s, border-color 0.15s;"
                onmouseover="this.style.borderColor='var(--border-hover)'; this.style.transform='translateY(-2px)';"
                onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';"
                onclick="openDriverProfile(${driverLeader.driver_number})">
@@ -2492,8 +2631,9 @@ async function loadStandings() {
         const tLogoHtml = getTeamLogoHtml(teamLeader.team_name, '32px');
 
         // Constructor Leader Tile (Points on the LEFT, text mirrored)
+        // Constructor Leader Tile (Points on the LEFT, text mirrored)
         const tTile = `
-          <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1.25rem; cursor:pointer; transition: transform 0.15s, border-color 0.15s;"
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:0.75rem 1.25rem; cursor:pointer; transition: transform 0.15s, border-color 0.15s;"
                onmouseover="this.style.borderColor='var(--border-hover)'; this.style.transform='translateY(-2px)';"
                onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';"
                onclick="openTeamProfile('${teamLeader.team_name}')">
@@ -3406,7 +3546,7 @@ async function viewDriverDetails(driverNumber) {
     const LEFT_PAD = 80;
     const RIGHT_PAD = 80;
     const TOP_PAD = 20;
-    const BOTTOM_PAD = 60; 
+    const BOTTOM_PAD = 75; 
 
     const svgWidth = LEFT_PAD + (usedCompounds.length * BOX_W) + ((usedCompounds.length - 1) * BOX_GAP) + RIGHT_PAD;
     const svgHeight = CHART_H + TOP_PAD + BOTTOM_PAD;
@@ -3485,9 +3625,9 @@ async function viewDriverDetails(driverNumber) {
             svgContent += `<circle cx="${cx}" cy="${yPx(s.median)}" r="3.5" fill="var(--bg)" stroke="${color}" stroke-width="1.5"/>`;
             
             // Labels
-            svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 18}" text-anchor="middle" fill="${color}" font-family="Barlow Condensed,sans-serif" font-size="14" font-weight="700">${compound}</text>`;
-            svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 32}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="11">${times.length} laps</text>`;
-            svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 46}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="12" font-weight="700">Avg: ${fmtLapTime(s.mean)}</text>`;
+            svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 18}" text-anchor="middle" fill="${color}" font-family="Barlow Condensed,sans-serif" font-size="15" font-weight="700">${compound}</text>`;
+            svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 34}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="12">${times.length} laps</text>`;
+            svgContent += `<text x="${cx}" y="${svgHeight - BOTTOM_PAD + 50}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">Avg: ${fmtLapTime(s.mean)}</text>`;
         }
     });
 
@@ -3586,15 +3726,19 @@ async function openDriverProfile(driverNumber) {
        const myPosObj = qResult.find(p => p.driver_number === driverNumber);
        if (!myPosObj) continue;
        
-       if (myPosObj.position <= 10) q3Apps++;
+       // THE FIX: Ensure position exists before counting it!
+       if (myPosObj.position && myPosObj.position <= 10) q3Apps++;
        const me = qDrivers.find(d => d.driver_number === driverNumber);
        if (me) {
          const teammate = qDrivers.find(d => d.team_name === me.team_name && d.driver_number !== driverNumber);
          if (teammate) {
            const tmPosObj = qResult.find(p => p.driver_number === teammate.driver_number);
            if (tmPosObj) {
-              if (myPosObj.position < tmPosObj.position) h2hWin++;
-              else if (myPosObj.position > tmPosObj.position) h2hLoss++;
+              // Treat nulls as 999 (last place) so DNFs always mathematically lose
+              const myP = myPosObj.position || 999; 
+              const tmP = tmPosObj.position || 999;
+              if (myP < tmP) h2hWin++;
+              else if (myP > tmP) h2hLoss++;
            }
          }
        }
@@ -3774,7 +3918,7 @@ async function openDriverProfile(driverNumber) {
               <span style="font-size:0.55rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px; font-family:'Barlow Condensed', sans-serif;">Finish</span>
               <div class="driver-pos ${posClass}" style="font-size: 1.25rem; line-height: 1; position: relative;">
                 <div style="position: absolute; right: 100%; top: 50%; transform: translateY(-50%); padding-right: 6px; display: flex; align-items: center;">
-                  ${getTrophyHtml(myPos, '18px', false)}
+                  ${isRace ? getTrophyHtml(myPos, '18px', false) : ''}
                 </div>
                 ${formattedPos}
               </div>
