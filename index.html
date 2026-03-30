@@ -785,6 +785,106 @@ function fmtLapTime(secs) {
   return m > 0 ? `${m}:${s}` : `${s}`;
 }
 
+// Global Helper: Unify, interpolate, and perfectly align telemetry traces using GPS spatial mapping
+window.processTelemetryMath = function(dataArray, numPoints = 300) {
+    // 1. Process Raw GPS Distance
+    const processed = dataArray.map(d => {
+        const t0 = new Date(d.lap.date_start).getTime();
+        
+        const sortedLoc = [...(d.loc || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+        const locTrace = [];
+        let cum = 0;
+        sortedLoc.forEach((l, i) => {
+            const t = (new Date(l.date).getTime() - t0) / 1000;
+            if (i > 0) {
+                const prev = sortedLoc[i-1];
+                cum += Math.hypot(l.x - prev.x, l.y - prev.y); // Use spatial GPS to calculate true distance
+            }
+            locTrace.push({ time: t, rawDist: cum, x: l.x, y: l.y });
+        });
+        
+        const sortedCar = [...(d.car || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+        return { ...d, t0, locTrace, sortedCar, totalRawDist: cum };
+    });
+
+    // 2. Finish Line Anchoring (Find max total dist to normalize Lap 1 grid slots)
+    const maxTotalDist = Math.max(...processed.map(p => p.totalRawDist));
+
+    processed.forEach(p => {
+        const offset = maxTotalDist - p.totalRawDist;
+        p.locTrace.forEach(l => { l.dist = l.rawDist + offset; });
+        
+        // Map Car speeds to precise GPS distances
+        p.trace = [];
+        p.sortedCar.forEach(c => {
+            const t = (new Date(c.date).getTime() - p.t0) / 1000;
+            if (t < -1) return; // drop noise
+            
+            let idx = p.locTrace.findIndex(item => item.time >= t);
+            let dist, x, y;
+            if(idx <= 0) {
+                dist = p.locTrace[0]?.dist || 0;
+                x = p.locTrace[0]?.x || 0;
+                y = p.locTrace[0]?.y || 0;
+            } else if(idx === -1) {
+                const last = p.locTrace[p.locTrace.length-1];
+                dist = last?.dist || 0;
+                x = last?.x || 0;
+                y = last?.y || 0;
+            } else {
+                let p1 = p.locTrace[idx-1], p2 = p.locTrace[idx];
+                let fraction = (t - p1.time) / (p2.time - p1.time) || 0;
+                dist = p1.dist + fraction * (p2.dist - p1.dist);
+                x = p1.x + fraction * (p2.x - p1.x);
+                y = p1.y + fraction * (p2.y - p1.y);
+            }
+            p.trace.push({ time: t, speed: c.speed, dist, x, y });
+        });
+    });
+
+    // 3. Uniform Resampling
+    const step = maxTotalDist / numPoints;
+    const baseTrace = processed[0].trace;
+
+    const getAtDist = (arr, targetDist) => {
+        if(arr.length === 0) return {time:0, speed:0, x:0, y:0};
+        let idx = arr.findIndex(item => item.dist >= targetDist);
+        if(idx <= 0) return arr[0];
+        if(idx === -1) return arr[arr.length-1];
+        let p1 = arr[idx-1], p2 = arr[idx];
+        let fraction = (targetDist - p1.dist) / (p2.dist - p1.dist) || 0;
+        return {
+            time: p1.time + fraction * (p2.time - p1.time),
+            speed: p1.speed + fraction * (p2.speed - p1.speed),
+            x: p1.x + fraction * (p2.x - p1.x),
+            y: p1.y + fraction * (p2.y - p1.y)
+        };
+    };
+
+    const chartLabels = [];
+    const trackX = [];
+    const trackY = [];
+    const uniformData = processed.map(p => ({ dNum: p.dNum, lap: p.lap, speedData: [], deltaData: [] }));
+
+    for (let i = 0; i <= numPoints; i++) {
+        const targetDist = i * step;
+        chartLabels.push((targetDist / 1000).toFixed(2) + 'km');
+
+        const basePt = getAtDist(baseTrace, targetDist);
+        trackX.push(basePt.x);
+        trackY.push(basePt.y);
+
+        uniformData.forEach((ud, idx) => {
+            const pt = getAtDist(processed[idx].trace, targetDist);
+            ud.speedData.push(pt.speed);
+            ud.deltaData.push(pt.time - basePt.time);
+        });
+    }
+
+    const corners = calculateTrackCorners(trackX, trackY);
+    return { chartLabels, uniformData, corners };
+};
+
 // Global Helper: Mathematically derive track corners from GPS telemetry
 function calculateTrackCorners(trackX, trackY) {
     const NUM_POINTS = trackX.length - 1;
@@ -907,7 +1007,7 @@ function toggleTheme() {
   if (document.getElementById('view-drivers').classList.contains('active')) {
     const lapTimesTab = document.getElementById('subtab-content-lap-times');
     if (lapTimesTab && lapTimesTab.classList.contains('active')) {
-      renderBoxWhisker('subtab-content-lap-times', null);
+      renderPaceAnalysisTab('subtab-content-lap-times'); // Changed
     }
   }
 }
@@ -950,9 +1050,9 @@ function switchDriverSubTab(tabId) {
   if (tabId === 'places' && currentDriverView) {
     renderRacePositionChart('driver-subtab-content-places', currentDriverView);
   }
-  // Trigger box-whisker for driver lap times
+// Trigger box-whisker for driver lap times
   if (tabId === 'lap-times' && currentDriverView && currentSession) {
-    renderBoxWhisker('driver-subtab-content-lap-times', currentDriverView);
+    renderPaceAnalysisTab('driver-subtab-content-lap-times'); // Changed
   }
 }
 
@@ -1035,9 +1135,12 @@ function switchSubTab(tabId) {
   } else if (tabId === 'pit-stops' || tabId === 'run-plans') {
     renderSessionStints(containerId);
   } else if (tabId === 'lap-times') {
-    renderBoxWhisker(containerId, null);
+    renderPaceAnalysisTab(containerId); 
   } else if (tabId === 'track-dominance') {
-    renderTrackDominance(); // NEW TRIGGER
+    renderTrackDominance(); 
+  } else if (tabId === 'lap-comparisons') {
+    // THE FIX: Route to our new function!
+    renderLapComparisons(containerId);
   }
 }
 
@@ -1278,291 +1381,629 @@ async function getLapAnalysisData(sessionKey, driverNumber = null) {
   return results.sort((a, b) => a.lap_number - b.lap_number);
 }
 
-async function renderBoxWhisker(containerId, driverNumber) {
-  const container = document.getElementById(containerId);
-  if (!container || !currentSession) return;
-  container.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing Race Pace...</div>`;
-
-  try {
-    // 1. Fetch laps and safety car data
-    const [allLaps, scPeriodsData] = await Promise.all([
-      getLapAnalysisData(currentSession.session_key),
-      getSafetyCarPeriods(currentSession.session_key, await getLapAnalysisData(currentSession.session_key, orderedDriversList[0]?.driver_number))
-    ]);
-
-    const scPeriods = scPeriodsData || [];
-    const isSCLap = (lapNum) => scPeriods.some(p => lapNum >= Math.floor(p.startLap) && lapNum <= Math.ceil(p.endLap));
-
-    // 2. Filter raw laps (Remove pits and Safety Cars)
-    const driverData = {};
-    allLaps.forEach(l => {
-      if (!l.lap_duration || l.lap_duration <= 0 || l.is_pit_out_lap || l.is_pit_in_lap || isSCLap(l.lap_number)) return;
-      if (!driverData[l.driver_number]) driverData[l.driver_number] = [];
-      driverData[l.driver_number].push(l.lap_duration);
-    });
-
-    const validDrivers = [];
+// --- 1. THE WRAPPER FUNCTION ---
+// Handles setting up the HTML layout for the tab, then fires the independent widgets
+function renderPaceAnalysisTab(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
     
-    // 3. Clean extreme outliers (traffic/mistakes) and calculate averages
-    orderedDriversList.forEach(d => {
-        const times = driverData[d.driver_number] || [];
-        if (times.length > 0) {
-            const sorted = [...times].sort((a,b) => a-b);
-            const median = sorted[Math.floor(sorted.length / 2)];
-            const cleanTimes = sorted.filter(t => t <= median * 1.10); // Remove any lap 10% slower than median
+    container.innerHTML = `
+        <div id="gap-widget-${containerId}"></div>
+        <div id="violin-widget-${containerId}" style="margin-top: 2.5rem;"></div>
+    `;
+    
+    renderGapToLeader(`gap-widget-${containerId}`);
+    renderBoxWhisker(`violin-widget-${containerId}`);
+}
 
-            if (cleanTimes.length > 0) {
-                const mean = cleanTimes.reduce((a,b) => a+b, 0) / cleanTimes.length;
-                validDrivers.push({
-                    ...d,
-                    times: cleanTimes,
-                    mean: mean,
-                    median: median,
-                    q1: cleanTimes[Math.floor(cleanTimes.length * 0.25)],
-                    q3: cleanTimes[Math.floor(cleanTimes.length * 0.75)]
-                });
-            }
+
+// --- 2. GAP TO LEADER CHART (STANDALONE WIDGET) ---
+async function renderGapToLeader(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || !currentSession) return;
+    
+    container.innerHTML = `<div class="loading"><div class="spinner"></div>Calculating Gaps...</div>`;
+
+    try {
+        const [allLaps, scPeriodsData] = await Promise.all([
+            getLapAnalysisData(currentSession.session_key),
+            getSafetyCarPeriods(currentSession.session_key, await getLapAnalysisData(currentSession.session_key, orderedDriversList[0]?.driver_number))
+        ]);
+
+        if (allLaps.length === 0) {
+            container.innerHTML = `<div class="error-msg">No lap data available for gap analysis.</div>`;
+            return;
         }
-    });
 
-    if (validDrivers.length === 0) {
-        container.innerHTML = `<div class="error-msg">No clean racing laps available for pace analysis.</div>`;
-        return;
-    }
-
-    // 4. Rank drivers by fastest average pace
-    validDrivers.sort((a, b) => a.mean - b.mean);
-    const bestMean = validDrivers[0].mean;
-
-    // --- INTERACTIVE RENDERING STATE ---
-    let currentDrivers = [...validDrivers];
-    let isDragging = false;
-    let startX = 0;
-
-    const isLight = document.body.dataset.theme === 'light';
-    const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
-    const tickColor = isLight ? '#444' : '#aaa';
-    const surfaceColor = isLight ? '#f8f8f6' : '#1a1a1a';
-    const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
-
-    const drawChart = () => {
-        if (currentDrivers.length === 0) return;
-
-        let minT = Infinity, maxT = -Infinity;
-        currentDrivers.forEach(d => {
-            minT = Math.min(minT, ...d.times);
-            maxT = Math.max(maxT, ...d.times);
-        });
-
-        const yPad = (maxT - minT) * 0.1 || 1;
-        minT -= yPad;
-        maxT += yPad;
-
-        // DYNAMIC LAYOUT MATH
-        const svgViewW = 1000; // Fixed internal coordinate width
-        const CHART_H = 400;
-        const LEFT_PAD = 80;
-        const RIGHT_PAD = 40;
-        const TOP_PAD = 20;
-        const BOTTOM_PAD = 100; // Space for labels underneath
-
-        const svgHeight = CHART_H + TOP_PAD + BOTTOM_PAD;
+        const scPeriods = scPeriodsData || [];
         
-        // Calculate dynamic width and spacing based on the number of drivers in view
-        const availableW = svgViewW - LEFT_PAD - RIGHT_PAD;
-        const step = availableW / currentDrivers.length;
-        const BOX_W = Math.min(step * 0.75, 140); // Cap width to 140px so they don't look ridiculous when zoomed
-
-        const yPx = (val) => TOP_PAD + (1 - (val - minT) / (maxT - minT)) * CHART_H;
-
-        function gaussianKDE(x, data, bw) {
-            let sum = 0;
-            for(let i=0; i<data.length; i++){
-                let v = (x - data[i]) / bw;
-                sum += Math.exp(-0.5 * v * v);
-            }
-            return sum / (data.length * bw * Math.sqrt(2 * Math.PI));
-        }
-
-        let svgContent = '';
-
-        // Draw Y-Axis Grid Lines
-        const numTicks = 8;
-        for(let i=0; i<=numTicks; i++) {
-            const val = minT + (i/numTicks)*(maxT - minT);
-            const y = yPx(val);
-            svgContent += `<line x1="${LEFT_PAD}" y1="${y}" x2="${svgViewW - RIGHT_PAD}" y2="${y}" stroke="${gridColor}" stroke-width="1"/>`;
-            svgContent += `<text x="${LEFT_PAD - 8}" y="${y + 4}" text-anchor="end" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="12">${fmtLapTime(val)}</text>`;
-        }
-
-        currentDrivers.forEach((d, ci) => {
-            const tc = teamColor(d.team_name);
-            const cx = LEFT_PAD + (ci * step) + (step / 2); // Center of the driver's column
-
-            const bw = 0.3;
-            const steps = 100;
-            const stepSize = (maxT - minT) / steps;
-            const densities = [];
-            let maxDensity = 0;
-
-            for(let i=0; i<=steps; i++) {
-                const v = minT + i * stepSize;
-                const den = gaussianKDE(v, d.times, bw);
-                densities.push({ v, d: den });
-                if (den > maxDensity) maxDensity = den;
-            }
-
-            // Draw Violin Curve
-            let pathD = '';
-            for(let i=0; i<=steps; i++) {
-                const pt = densities[i];
-                const pxX = cx + (pt.d / maxDensity) * (BOX_W / 2);
-                const pxY = yPx(pt.v);
-                pathD += i === 0 ? `M ${pxX} ${pxY} ` : `L ${pxX} ${pxY} `;
-            }
-            for(let i=steps; i>=0; i--) {
-                const pt = densities[i];
-                const pxX = cx - (pt.d / maxDensity) * (BOX_W / 2);
-                const pxY = yPx(pt.v);
-                pathD += `L ${pxX} ${pxY} `;
-            }
-            pathD += 'Z';
-            svgContent += `<path d="${pathD}" fill="${tc.bg}" fill-opacity="0.15" stroke="${tc.bg}" stroke-width="1.5" />`;
-
-            // Draw Solid Scatter Dots
-            d.times.forEach(t => {
-                const py = yPx(t);
-                const jitter = (Math.random() - 0.5) * (BOX_W * 0.35);
-                svgContent += `<circle cx="${cx + jitter}" cy="${py}" r="2.5" fill="${tc.bg}" opacity="0.85"/>`;
+        const driverCumTimes = {}; 
+        orderedDriversList.forEach(d => {
+            const dLaps = allLaps.filter(l => l.driver_number === d.driver_number).sort((a,b) => a.lap_number - b.lap_number);
+            let cum = 0;
+            const cumArr = [];
+            dLaps.forEach(l => {
+                if (l.lap_duration) {
+                   cum += l.lap_duration;
+                   cumArr[l.lap_number] = cum;
+                }
             });
-
-            // Draw Boxplot Core
-            const iqrW = 8;
-            svgContent += `<rect x="${cx - iqrW/2}" y="${yPx(d.q3)}" width="${iqrW}" height="${yPx(d.q1) - yPx(d.q3)}" fill="${tc.bg}" stroke="${tc.bg}" stroke-width="1"/>`;
-            svgContent += `<circle cx="${cx}" cy="${yPx(d.median)}" r="3.5" fill="var(--bg)" stroke="${tc.bg}" stroke-width="1.5"/>`;
-
-            // Draw Driver Badge Label
-            const acronym = d.name_acronym || d.last_name.substring(0,3).toUpperCase();
-            const badgeY = svgHeight - BOTTOM_PAD + 20;
-            const badgeW = 60, badgeH = 24;
-
-            let tInfo = TEAM_INFO[d.team_name];
-            if (!tInfo) {
-                for (const [k, v] of Object.entries(TEAM_INFO)) {
-                    if (d.team_name && (d.team_name.includes(k) || k.includes(d.team_name))) { tInfo = v; break; }
-                }
-            }
-            let svgLogoHtml = '';
-            if (tInfo && tInfo.logo) {
-                const keepOriginalColor = d.team_name === 'Ferrari' || d.team_name === 'Red Bull Racing';
-                let filterCss = '';
-                if (!keepOriginalColor) {
-                    filterCss = tc.text === '#fff' ? 'filter: invert(1) brightness(2);' : 'filter: brightness(0);';
-                }
-                svgLogoHtml = `<image href="${tInfo.logo}" x="${cx - badgeW/2 + 4}" y="${badgeY + 6}" height="12" width="16" preserveAspectRatio="xMidYMid meet" style="${filterCss}" pointer-events="none" />`;
-            }
-
-            svgContent += `<rect x="${cx - badgeW/2}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="3" fill="${tc.bg}" />`;
-            svgContent += svgLogoHtml;
-            svgContent += `<text x="${cx + 8}" y="${badgeY + 16}" text-anchor="middle" fill="${tc.text}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">${acronym}</text>`;
-
-            // Text: Average & Gap
-            svgContent += `<text x="${cx}" y="${badgeY + 42}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">Avg: ${fmtLapTime(d.mean)}</text>`;
-
-            const gap = d.mean - bestMean;
-            const gapText = gap === 0 ? 'Fastest' : `+${gap.toFixed(3)}s`;
-            const gapColor = gap === 0 ? '#c87eff' : tickColor;
-            svgContent += `<text x="${cx}" y="${badgeY + 58}" text-anchor="middle" fill="${gapColor}" font-family="Barlow Condensed,sans-serif" font-size="12" font-weight="600">${gapText}</text>`;
+            driverCumTimes[d.driver_number] = cumArr;
         });
 
-        // The Brush Rect for Dragging
-        svgContent += `<rect id="brush-${containerId}" y="${TOP_PAD}" height="${CHART_H}" fill="rgba(255,255,255,0.2)" stroke="#fff" stroke-dasharray="4" style="display:none;" pointer-events="none" />`;
+        // THE FIX: Filter out any drivers who never registered a single valid lap
+        const activeDrivers = orderedDriversList.filter(d => {
+            const times = driverCumTimes[d.driver_number];
+            return times && times.some(t => t !== undefined);
+        });
 
-        const resetBtnHtml = currentDrivers.length !== validDrivers.length 
-            ? `<button id="btn-reset-${containerId}" class="theme-toggle" style="position:absolute; top: 10px; right: 10px; z-index: 10; padding: 0.4rem 1rem;">Reset Zoom</button>`
-            : '';
+        const maxLap = Math.max(...allLaps.map(l => l.lap_number || 0));
+        const leaderCumTimes = [];
+        for (let i = 1; i <= maxLap; i++) {
+            let minTime = Infinity;
+            // Iterate only over active drivers to find the true leader pace
+            activeDrivers.forEach(d => {
+                const t = driverCumTimes[d.driver_number]?.[i];
+                if (t !== undefined && t < minTime) minTime = t;
+            });
+            leaderCumTimes[i] = minTime;
+        }
 
+        const driverGaps = {};
+        // Only build datasets for active drivers
+        activeDrivers.forEach(d => {
+            driverGaps[d.driver_number] = [];
+            for (let i = 1; i <= maxLap; i++) {
+                const t = driverCumTimes[d.driver_number]?.[i];
+                const lt = leaderCumTimes[i];
+                if (t !== undefined && lt !== Infinity) {
+                    driverGaps[d.driver_number].push(t - lt);
+                } else {
+                    driverGaps[d.driver_number].push(null);
+                }
+            }
+        });
+
+        const isLight = document.body.dataset.theme === 'light';
+        const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+        const tickColor = isLight ? '#444' : '#aaa';
+        const surfaceColor = isLight ? '#f8f8f6' : '#1a1a1a';
+        const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+
+        const renderTeamCounts = {};
+        // THE FIX: Use activeDrivers here
+        const gapDatasets = activeDrivers.map((d, i) => {
+            const tName = d.team_name || 'Unknown';
+            if (!renderTeamCounts[tName]) renderTeamCounts[tName] = 0;
+            renderTeamCounts[tName]++;
+// ... (keep the rest of the dataset logic the same)
+            const isSecondDriver = renderTeamCounts[tName] > 1;
+            const tc = teamColor(tName);
+            const isLeader = i === 0;
+
+            return {
+                label: d.name_acronym || d.last_name || `#${d.driver_number}`,
+                data: driverGaps[d.driver_number],
+                borderColor: tc.bg,
+                backgroundColor: tc.bg,
+                borderWidth: isLeader ? 4 : 2,
+                borderDash: isSecondDriver ? [5, 5] : [],
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                fill: false,
+                tension: 0.2,
+                spanGaps: true,
+                order: isLeader ? 0 : 1,
+                _driverNum: d.driver_number,
+                _origColor: tc.bg,
+                _origWidth: isLeader ? 4 : 2,
+                _origOrder: isLeader ? 0 : 1,
+                _origDash: isSecondDriver ? [5, 5] : []
+            };
+        });
+
+        let gapLegendHtml = `<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.75rem; margin-top:1.5rem; margin-bottom: 2rem;">`;
+        const legTeamCounts = {};
+        // THE FIX: Use activeDrivers here too!
+        activeDrivers.forEach(d => {
+            const tName = d.team_name || 'Unknown';
+            if (!legTeamCounts[tName]) legTeamCounts[tName] = 0;
+            legTeamCounts[tName]++;
+// ... (keep the rest of the legend logic the same)
+            const isSecondDriver = legTeamCounts[tName] > 1;
+            const tc = teamColor(tName);
+            const acronym = d.name_acronym || d.last_name || `#${d.driver_number}`;
+            
+            const tileBg = isSecondDriver ? 'transparent' : tc.bg;
+            const tileBorder = isSecondDriver ? `2px dashed ${tc.bg}` : `2px solid ${tc.bg}`;
+            const tileText = isSecondDriver ? 'var(--text)' : tc.text;
+            const logoColor = isSecondDriver ? null : tc.text; 
+
+            gapLegendHtml += `
+                <div class="driver-num-badge" 
+                     onmouseenter="highlightGapLine(${d.driver_number}, '${containerId}')"
+                     onmouseleave="resetGapLines('${containerId}')"
+                     style="background:${tileBg}; border:${tileBorder}; color:${tileText}; width:68px; flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:default; box-sizing: border-box; transition: transform 0.15s;" 
+                     onmouseover="this.style.transform='translateY(-2px)';" 
+                     onmouseout="this.style.transform='translateY(0)';"
+                     title="${d.full_name || acronym}">
+                    ${getTeamLogoHtml(tName, '10px', logoColor)}
+                    <span style="font-size:0.85rem; letter-spacing:0.05em; font-weight:700;">${acronym}</span>
+                </div>
+            `;
+        });
+        gapLegendHtml += `</div>`;
+
+        // THE FIX: Increased height to 500px, added wrapper for brush zoom!
         container.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                <div class="standings-title">Clean Racing Pace</div>
-                <div style="font-size:0.75rem; color:var(--text-dim); font-family:'Barlow Condensed', sans-serif; text-transform:uppercase; letter-spacing:0.05em;">Drag across chart to zoom into specific drivers</div>
-            </div>
-            <div style="position:relative; background:${surfaceColor}; border:1px solid ${borderColor}; border-radius:4px; overflow:hidden;">
-                ${resetBtnHtml}
-                <div style="width:100%;">
-                    <svg id="svg-${containerId}" viewBox="0 0 ${svgViewW} ${svgHeight}" width="100%" height="auto" style="display:block; cursor:crosshair; min-height:400px; max-height:600px;">
-                        ${svgContent}
-                    </svg>
+                <div class="standings-title">Gap to Leader</div>
+                <div style="display:flex; gap:12px; font-family:'Barlow Condensed'; font-size:0.75rem; font-weight:700;">
+                    <span style="color:#ffcc00; background:rgba(0,0,0,0.08); padding:2px 8px; border-radius:2px;">█ SC</span>
+                    <span style="color:#ff6600; background:rgba(0,0,0,0.08); padding:2px 8px; border-radius:2px;">█ VSC</span>
                 </div>
             </div>
+            <div style="position:relative; background:${surfaceColor}; border:1px solid ${borderColor}; border-radius:4px; padding:1.5rem 1rem 1rem; height: 500px; width: 100%;">
+                <button id="gap-reset-${containerId}" class="theme-toggle" style="display:none; position:absolute; top: 10px; right: 10px; z-index: 10; padding: 0.4rem 1rem;">Reset Zoom</button>
+                <div id="gap-chart-area-${containerId}" style="width: 100%; height: 100%; position: relative; cursor: crosshair;">
+                    <div id="gap-brush-${containerId}" style="position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,0.15); border: 1px dashed rgba(255,255,255,0.5); pointer-events: none; display: none; z-index: 50;"></div>
+                    <canvas id="canvas-gap-${containerId}"></canvas>
+                </div>
+            </div>
+            ${gapLegendHtml}
         `;
 
-        // Attach Interactive Drag-to-Zoom Logic
-        const svgEl = document.getElementById(`svg-${containerId}`);
-        const brushEl = document.getElementById(`brush-${containerId}`);
-        const resetBtn = document.getElementById(`btn-reset-${containerId}`);
+        const ctxGap = document.getElementById(`canvas-gap-${containerId}`).getContext('2d');
+        const chartLabels = Array.from({length: maxLap}, (_, i) => i + 1);
 
-        if (resetBtn) {
-            resetBtn.onclick = () => {
-                currentDrivers = [...validDrivers];
-                drawChart();
-            };
+        const scOverlayPlugin = {
+            id: 'scOverlay',
+            beforeDraw(chart) {
+                const { ctx, chartArea, scales } = chart;
+                if (!chartArea || !scPeriods.length) return;
+                scPeriods.forEach(p => {
+                    const xStart = scales.x.getPixelForValue(Math.ceil(p.startLap) - 1); 
+                    const xEnd = scales.x.getPixelForValue(Math.floor(p.endLap) - 1);
+                    ctx.save();
+                    ctx.fillStyle = p.type === 'VSC' ? (isLight ? 'rgba(255, 102, 0, 0.45)' : 'rgba(255, 102, 0, 0.2)') : (isLight ? 'rgba(255, 204, 0, 0.45)' : 'rgba(255, 204, 0, 0.2)');
+                    const drawStartX = Math.max(chartArea.left, xStart);
+                    const drawEndX = Math.min(chartArea.right, xEnd);
+                    if (drawEndX > drawStartX) {
+                        ctx.fillRect(drawStartX, chartArea.top, drawEndX - drawStartX, chartArea.height);
+                    }
+                    ctx.restore();
+                });
+            }
+        };
+
+        if (window[`gapChartInst_${containerId}`]) {
+            window[`gapChartInst_${containerId}`].destroy();
         }
 
-        if (svgEl) {
-            const getSVGX = (e) => {
-                const pt = svgEl.createSVGPoint();
-                pt.x = e.clientX;
-                pt.y = e.clientY;
-                return pt.matrixTransform(svgEl.getScreenCTM().inverse()).x;
-            };
+        window.highlightGapLine = (id, cid) => {
+            const chart = window[`gapChartInst_${cid}`];
+            if (!chart) return;
+            chart.data.datasets.forEach(ds => {
+                if (ds._driverNum === id) {
+                    ds.borderColor = convertHexToRGBA(ds._origColor, 1.0);
+                    ds.borderWidth = 5;
+                    ds.order = 0;
+                } else {
+                    ds.borderColor = convertHexToRGBA(ds._origColor, isLight ? 0.1 : 0.05);
+                    ds.borderWidth = 1.5;
+                    ds.order = 1;
+                }
+            });
+            chart.update('none');
+        };
 
-            svgEl.onmousedown = (e) => {
-                isDragging = true;
-                startX = getSVGX(e);
-                brushEl.setAttribute('x', startX);
-                brushEl.setAttribute('width', 0);
-                brushEl.style.display = 'block';
-            };
+        window.resetGapLines = (cid) => {
+            const chart = window[`gapChartInst_${cid}`];
+            if (!chart) return;
+            chart.data.datasets.forEach(ds => {
+                ds.borderColor = ds._origColor;
+                ds.borderWidth = ds._origWidth;
+                ds.order = ds._origOrder;
+                ds.borderDash = ds._origDash || [];
+            });
+            chart.update('none');
+        };
 
-            svgEl.onmousemove = (e) => {
-                if (!isDragging) return;
-                const currentX = getSVGX(e);
-                brushEl.setAttribute('x', Math.min(startX, currentX));
-                brushEl.setAttribute('width', Math.abs(currentX - startX));
-            };
-
-            const finishDrag = (e) => {
-                if (!isDragging) return;
-                isDragging = false;
-                brushEl.style.display = 'none';
-                const endX = getSVGX(e);
-                const minX = Math.min(startX, endX);
-                const maxX = Math.max(startX, endX);
-
-                if (maxX - minX > 30) {
-                    const selected = currentDrivers.filter((_, i) => {
-                        const cx = LEFT_PAD + (i * step) + (step / 2);
-                        return cx >= minX && cx <= maxX;
-                    });
-                    if (selected.length > 0 && selected.length < currentDrivers.length) {
-                        currentDrivers = selected;
-                        drawChart();
+        window[`gapChartInst_${containerId}`] = new Chart(ctxGap, {
+            type: 'line',
+            data: { labels: chartLabels, datasets: gapDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'nearest', axis: 'xy', intersect: false },
+                plugins: {
+                    legend: { display: false }, 
+                    tooltip: { 
+                        titleFont: { family: 'Barlow Condensed', size: 14 }, 
+                        bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 },
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) {
+                                    label += '+' + context.parsed.y.toFixed(3) + 's';
+                                }
+                                return label;
+                            },
+                            title: function(context) {
+                                return 'Lap ' + context[0].label;
+                            }
+                        }
+                    }
+                },
+                // THE FIX: Removed chart highlighting logic here! Only Tooltips remain.
+                scales: {
+                    x: { ticks: { color: tickColor, font: { family: 'Barlow Condensed', weight: 600 } }, grid: { color: gridColor }, title: { display: true, text: 'Lap', color: tickColor, font: { family: 'Barlow Condensed' } } },
+                    y: { 
+                        reverse: true, 
+                        beginAtZero: true,
+                        title: { display: true, text: 'Gap (s)', color: tickColor, font: { family: 'Barlow Condensed' } }, 
+                        grid: { color: gridColor }, 
+                        ticks: { color: tickColor, font: { family: 'Barlow Condensed' } } 
                     }
                 }
-            };
+            },
+            plugins: [scOverlayPlugin]
+        });
 
-            svgEl.onmouseup = finishDrag;
-            svgEl.onmouseleave = finishDrag;
+        // --- NEW: DRAG TO ZOOM LOGIC ---
+        const chartWrapper = document.getElementById(`gap-chart-area-${containerId}`);
+        const brush = document.getElementById(`gap-brush-${containerId}`);
+        const resetBtn = document.getElementById(`gap-reset-${containerId}`);
+        
+        let isDragging = false;
+        let startX = 0;
+
+        chartWrapper.onmousedown = (e) => {
+            isDragging = true;
+            const rect = chartWrapper.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            brush.style.left = startX + 'px';
+            brush.style.width = '0px';
+            brush.style.display = 'block';
+        };
+
+        chartWrapper.onmousemove = (e) => {
+            if (!isDragging) return;
+            const rect = chartWrapper.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            brush.style.left = Math.min(startX, currentX) + 'px';
+            brush.style.width = Math.abs(currentX - startX) + 'px';
+        };
+
+        const finishDrag = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            brush.style.display = 'none';
+
+            const rect = chartWrapper.getBoundingClientRect();
+            const endX = e.clientX - rect.left;
+            
+            const minPixelX = Math.min(startX, endX);
+            const maxPixelX = Math.max(startX, endX);
+
+            if (maxPixelX - minPixelX < 15) return; // Prevent accidental tiny clicks
+
+            const chart = window[`gapChartInst_${containerId}`];
+            if (!chart || !chart.chartArea) return;
+            const area = chart.chartArea;
+
+            // Calculate percentage relative to the chart's actual plotting area
+            let pctStart = (minPixelX - area.left) / area.width;
+            let pctEnd = (maxPixelX - area.left) / area.width;
+            
+            pctStart = Math.max(0, Math.min(1, pctStart));
+            pctEnd = Math.max(0, Math.min(1, pctEnd));
+
+            const currentMin = chart.options.scales.x.min ?? 0;
+            const currentMax = chart.options.scales.x.max ?? (chartLabels.length - 1);
+            const currentRange = currentMax - currentMin;
+
+            const newMin = Math.round(currentMin + pctStart * currentRange);
+            const newMax = Math.round(currentMin + pctEnd * currentRange);
+
+            if (newMax - newMin > 2) { // Only zoom if there's more than 2 laps
+                chart.options.scales.x.min = newMin;
+                chart.options.scales.x.max = newMax;
+                chart.update('none'); // Update instantly
+                resetBtn.style.display = 'block';
+            }
+        };
+
+        chartWrapper.onmouseup = finishDrag;
+        chartWrapper.onmouseleave = finishDrag;
+
+        resetBtn.onclick = () => {
+            const chart = window[`gapChartInst_${containerId}`];
+            delete chart.options.scales.x.min;
+            delete chart.options.scales.x.max;
+            chart.update('none');
+            resetBtn.style.display = 'none';
+        };
+
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = `<div class="error-msg">Could not load gap data. ${e.message}</div>`;
+    }
+}
+
+
+// --- 3. RACE PACE VIOLINS (STANDALONE WIDGET) ---
+async function renderBoxWhisker(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || !currentSession) return;
+    
+    container.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing Race Pace...</div>`;
+
+    try {
+        const [allLaps, scPeriodsData] = await Promise.all([
+            getLapAnalysisData(currentSession.session_key),
+            getSafetyCarPeriods(currentSession.session_key, await getLapAnalysisData(currentSession.session_key, orderedDriversList[0]?.driver_number))
+        ]);
+
+        const scPeriods = scPeriodsData || [];
+        const isSCLap = (lapNum) => scPeriods.some(p => lapNum >= Math.floor(p.startLap) && lapNum <= Math.ceil(p.endLap));
+
+        const driverData = {};
+        allLaps.forEach(l => {
+          if (!l.lap_duration || l.lap_duration <= 0 || l.is_pit_out_lap || l.is_pit_in_lap || isSCLap(l.lap_number)) return;
+          if (!driverData[l.driver_number]) driverData[l.driver_number] = [];
+          driverData[l.driver_number].push(l.lap_duration);
+        });
+
+        const validDrivers = [];
+        orderedDriversList.forEach(d => {
+            const times = driverData[d.driver_number] || [];
+            if (times.length > 0) {
+                const sorted = [...times].sort((a,b) => a-b);
+                const median = sorted[Math.floor(sorted.length / 2)];
+                const cleanTimes = sorted.filter(t => t <= median * 1.10); 
+
+                if (cleanTimes.length > 0) {
+                    const mean = cleanTimes.reduce((a,b) => a+b, 0) / cleanTimes.length;
+                    validDrivers.push({
+                        ...d,
+                        times: cleanTimes,
+                        mean: mean,
+                        median: median,
+                        q1: cleanTimes[Math.floor(cleanTimes.length * 0.25)],
+                        q3: cleanTimes[Math.floor(cleanTimes.length * 0.75)]
+                    });
+                }
+            }
+        });
+
+        if (validDrivers.length === 0) {
+            container.innerHTML = `<div class="error-msg">No clean racing laps available for pace analysis.</div>`;
+            return;
         }
-    };
 
-    drawChart();
+        validDrivers.sort((a, b) => a.mean - b.mean);
+        const bestMean = validDrivers[0].mean;
 
-  } catch (e) {
-    console.error(e);
-    container.innerHTML = `<div class="error-msg">Could not load pace data. ${e.message}</div>`;
-  }
+        let currentDrivers = [...validDrivers];
+        let isDragging = false;
+        let startX = 0;
+
+        const isLight = document.body.dataset.theme === 'light';
+        const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+        const tickColor = isLight ? '#444' : '#aaa';
+        const surfaceColor = isLight ? '#f8f8f6' : '#1a1a1a';
+        const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+
+        const drawChart = () => {
+            if (currentDrivers.length === 0) return;
+
+            let minT = Infinity, maxT = -Infinity;
+            currentDrivers.forEach(d => {
+                minT = Math.min(minT, ...d.times);
+                maxT = Math.max(maxT, ...d.times);
+            });
+
+            const yPad = (maxT - minT) * 0.1 || 1;
+            minT -= yPad;
+            maxT += yPad;
+
+            const svgViewW = 1000;
+            const CHART_H = 400;
+            const LEFT_PAD = 80;
+            const RIGHT_PAD = 40;
+            const TOP_PAD = 20;
+            const BOTTOM_PAD = 100;
+
+            const svgHeight = CHART_H + TOP_PAD + BOTTOM_PAD;
+            
+            const availableW = svgViewW - LEFT_PAD - RIGHT_PAD;
+            const step = availableW / currentDrivers.length;
+            const BOX_W = Math.min(step * 0.75, 140);
+
+            const yPx = (val) => TOP_PAD + (1 - (val - minT) / (maxT - minT)) * CHART_H;
+
+            function gaussianKDE(x, data, bw) {
+                let sum = 0;
+                for(let i=0; i<data.length; i++){
+                    let v = (x - data[i]) / bw;
+                    sum += Math.exp(-0.5 * v * v);
+                }
+                return sum / (data.length * bw * Math.sqrt(2 * Math.PI));
+            }
+
+            let svgContent = '';
+
+            const numTicks = 8;
+            for(let i=0; i<=numTicks; i++) {
+                const val = minT + (i/numTicks)*(maxT - minT);
+                const y = yPx(val);
+                svgContent += `<line x1="${LEFT_PAD}" y1="${y}" x2="${svgViewW - RIGHT_PAD}" y2="${y}" stroke="${gridColor}" stroke-width="1"/>`;
+                svgContent += `<text x="${LEFT_PAD - 8}" y="${y + 4}" text-anchor="end" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="12">${fmtLapTime(val)}</text>`;
+            }
+
+            currentDrivers.forEach((d, ci) => {
+                const tc = teamColor(d.team_name);
+                const cx = LEFT_PAD + (ci * step) + (step / 2); 
+
+                const bw = 0.3;
+                const steps = 100;
+                const stepSize = (maxT - minT) / steps;
+                const densities = [];
+                let maxDensity = 0;
+
+                for(let i=0; i<=steps; i++) {
+                    const v = minT + i * stepSize;
+                    const den = gaussianKDE(v, d.times, bw);
+                    densities.push({ v, d: den });
+                    if (den > maxDensity) maxDensity = den;
+                }
+
+                let pathD = '';
+                for(let i=0; i<=steps; i++) {
+                    const pt = densities[i];
+                    const pxX = cx + (pt.d / maxDensity) * (BOX_W / 2);
+                    const pxY = yPx(pt.v);
+                    pathD += i === 0 ? `M ${pxX} ${pxY} ` : `L ${pxX} ${pxY} `;
+                }
+                for(let i=steps; i>=0; i--) {
+                    const pt = densities[i];
+                    const pxX = cx - (pt.d / maxDensity) * (BOX_W / 2);
+                    const pxY = yPx(pt.v);
+                    pathD += `L ${pxX} ${pxY} `;
+                }
+                pathD += 'Z';
+                svgContent += `<path d="${pathD}" fill="${tc.bg}" fill-opacity="0.15" stroke="${tc.bg}" stroke-width="1.5" />`;
+
+                d.times.forEach(t => {
+                    const py = yPx(t);
+                    const jitter = (Math.random() - 0.5) * (BOX_W * 0.35);
+                    svgContent += `<circle cx="${cx + jitter}" cy="${py}" r="2.5" fill="${tc.bg}" opacity="0.85"/>`;
+                });
+
+                const iqrW = 8;
+                svgContent += `<rect x="${cx - iqrW/2}" y="${yPx(d.q3)}" width="${iqrW}" height="${yPx(d.q1) - yPx(d.q3)}" fill="${tc.bg}" stroke="${tc.bg}" stroke-width="1"/>`;
+                svgContent += `<circle cx="${cx}" cy="${yPx(d.median)}" r="3.5" fill="var(--bg)" stroke="${tc.bg}" stroke-width="1.5"/>`;
+
+                const acronym = d.name_acronym || d.last_name.substring(0,3).toUpperCase();
+                const badgeY = svgHeight - BOTTOM_PAD + 20;
+                const badgeW = 60, badgeH = 24;
+
+                let tInfo = TEAM_INFO[d.team_name];
+                if (!tInfo) {
+                    for (const [k, v] of Object.entries(TEAM_INFO)) {
+                        if (d.team_name && (d.team_name.includes(k) || k.includes(d.team_name))) { tInfo = v; break; }
+                    }
+                }
+                let svgLogoHtml = '';
+                if (tInfo && tInfo.logo) {
+                    const keepOriginalColor = d.team_name === 'Ferrari' || d.team_name === 'Red Bull Racing';
+                    let filterCss = '';
+                    if (!keepOriginalColor) {
+                        filterCss = tc.text === '#fff' ? 'filter: invert(1) brightness(2);' : 'filter: brightness(0);';
+                    }
+                    svgLogoHtml = `<image href="${tInfo.logo}" x="${cx - badgeW/2 + 4}" y="${badgeY + 6}" height="12" width="16" preserveAspectRatio="xMidYMid meet" style="${filterCss}" pointer-events="none" />`;
+                }
+
+                svgContent += `<rect x="${cx - badgeW/2}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="3" fill="${tc.bg}" />`;
+                svgContent += svgLogoHtml;
+                svgContent += `<text x="${cx + 8}" y="${badgeY + 16}" text-anchor="middle" fill="${tc.text}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">${acronym}</text>`;
+
+                svgContent += `<text x="${cx}" y="${badgeY + 42}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="700">Avg: ${fmtLapTime(d.mean)}</text>`;
+
+                const gap = d.mean - bestMean;
+                const gapText = gap === 0 ? 'Fastest' : `+${gap.toFixed(3)}s`;
+                const gapColor = gap === 0 ? '#c87eff' : tickColor;
+                svgContent += `<text x="${cx}" y="${badgeY + 58}" text-anchor="middle" fill="${gapColor}" font-family="Barlow Condensed,sans-serif" font-size="12" font-weight="600">${gapText}</text>`;
+            });
+
+            svgContent += `<rect id="brush-${containerId}" y="${TOP_PAD}" height="${CHART_H}" fill="rgba(255,255,255,0.2)" stroke="#fff" stroke-dasharray="4" style="display:none;" pointer-events="none" />`;
+
+            const resetBtnHtml = currentDrivers.length !== validDrivers.length 
+                ? `<button id="btn-reset-${containerId}" class="theme-toggle" style="position:absolute; top: 10px; right: 10px; z-index: 10; padding: 0.4rem 1rem;">Reset Zoom</button>`
+                : '';
+
+            container.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <div class="standings-title">Clean Racing Pace</div>
+                    <div style="font-size:0.75rem; color:var(--text-dim); font-family:'Barlow Condensed', sans-serif; text-transform:uppercase; letter-spacing:0.05em;">Drag across chart to zoom into specific drivers</div>
+                </div>
+                <div style="position:relative; background:${surfaceColor}; border:1px solid ${borderColor}; border-radius:4px; overflow:hidden;">
+                    ${resetBtnHtml}
+                    <div style="width:100%;">
+                        <svg id="svg-${containerId}" viewBox="0 0 ${svgViewW} ${svgHeight}" width="100%" height="auto" style="display:block; cursor:crosshair; min-height:400px; max-height:600px;">
+                            ${svgContent}
+                        </svg>
+                    </div>
+                </div>
+            `;
+
+            const svgEl = document.getElementById(`svg-${containerId}`);
+            const brushEl = document.getElementById(`brush-${containerId}`);
+            const resetBtn = document.getElementById(`btn-reset-${containerId}`);
+
+            if (resetBtn) {
+                resetBtn.onclick = () => {
+                    currentDrivers = [...validDrivers];
+                    drawChart();
+                };
+            }
+
+            if (svgEl) {
+                const getSVGX = (e) => {
+                    const pt = svgEl.createSVGPoint();
+                    pt.x = e.clientX;
+                    pt.y = e.clientY;
+                    return pt.matrixTransform(svgEl.getScreenCTM().inverse()).x;
+                };
+
+                svgEl.onmousedown = (e) => {
+                    isDragging = true;
+                    startX = getSVGX(e);
+                    brushEl.setAttribute('x', startX);
+                    brushEl.setAttribute('width', 0);
+                    brushEl.style.display = 'block';
+                };
+
+                svgEl.onmousemove = (e) => {
+                    if (!isDragging) return;
+                    const currentX = getSVGX(e);
+                    brushEl.setAttribute('x', Math.min(startX, currentX));
+                    brushEl.setAttribute('width', Math.abs(currentX - startX));
+                };
+
+                const finishDrag = (e) => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    brushEl.style.display = 'none';
+                    const endX = getSVGX(e);
+                    const minX = Math.min(startX, endX);
+                    const maxX = Math.max(startX, endX);
+
+                    if (maxX - minX > 30) {
+                        const selected = currentDrivers.filter((_, i) => {
+                            const cx = LEFT_PAD + (i * step) + (step / 2);
+                            return cx >= minX && cx <= maxX;
+                        });
+                        if (selected.length > 0 && selected.length < currentDrivers.length) {
+                            currentDrivers = selected;
+                            drawChart();
+                        }
+                    }
+                };
+
+                svgEl.onmouseup = finishDrag;
+                svgEl.onmouseleave = finishDrag;
+            }
+        };
+
+        drawChart();
+
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = `<div class="error-msg">Could not load pace data. ${e.message}</div>`;
+    }
 }
 
 async function renderChampionshipBattle(allYearSessions, sortedDrivers, sortedTeams, driverInfoMap) {
@@ -2886,6 +3327,8 @@ async function selectSession(key, intendedSubTab = null) {
     tabsHtml += `<button class="subtab-btn" id="subtab-btn-pit-stops" onclick="switchSubTab('pit-stops')">Pit Stops</button>`;
     tabsHtml += `<button class="subtab-btn" id="subtab-btn-lap-times" onclick="switchSubTab('lap-times')">Race Pace</button>`;
     tabsHtml += `<button class="subtab-btn" id="subtab-btn-lap-chart" onclick="switchSubTab('lap-chart')">Positions Gained/Lost</button>`;
+    // THE FIX: Add the new Lap Comparisons tab here!
+    tabsHtml += `<button class="subtab-btn" id="subtab-btn-lap-comparisons" onclick="switchSubTab('lap-comparisons')">Lap Comparisons</button>`;
   } else if (isQuali) {
     // Removed the Race Pace tab here!
     tabsHtml += `<button class="subtab-btn" id="subtab-btn-track-dominance" onclick="switchSubTab('track-dominance')">Track Dominance</button>`;
@@ -4528,6 +4971,418 @@ changeYear = async function(year) {
     originalChangeYear(year); // Call your existing UI update logic
 }
 
+// --- NEW: LAP COMPARISONS WIDGET ---
+async function renderLapComparisons(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || !currentSession) return;
+
+    container.innerHTML = `<div class="loading"><div class="spinner"></div>Loading Lap Data...</div>`;
+
+    try {
+        const allLaps = await fetchJSON(`${BASE}/laps?session_key=${currentSession.session_key}`).catch(()=>[]);
+
+        // Filter out drivers who DNS'd (Did Not Start) or have no valid lap times
+        const activeDrivers = orderedDriversList.filter(d => {
+            return allLaps.some(l => l.driver_number === d.driver_number && l.lap_duration > 0);
+        });
+
+        if (activeDrivers.length === 0) {
+            container.innerHTML = `<div class="error-msg">No valid lap data available for comparisons.</div>`;
+            return;
+        }
+
+        const maxLap = Math.max(...allLaps.map(l => l.lap_number || 0));
+        let lapOptions = '';
+        for (let i = 1; i <= maxLap; i++) {
+            lapOptions += `<option value="${i}">Lap ${i}</option>`;
+        }
+
+        // Global State for this specific tab
+        window.lapCompState = {
+            selected: [],
+            lap: 1,
+            chartInstSpeed: null,
+            chartInstDelta: null
+        };
+
+        // --- UI BUILDER ---
+        let tilesHtml = `<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.75rem; margin-bottom: 2rem;">`;
+        activeDrivers.forEach(d => {
+            const tName = d.team_name || 'Unknown';
+            const tc = teamColor(tName);
+            const acronym = d.name_acronym || d.last_name || `#${d.driver_number}`;
+            
+            tilesHtml += `
+                <div class="lap-comp-tile" id="lc-tile-${d.driver_number}"
+                     onclick="toggleLapCompDriver(${d.driver_number})"
+                     style="background:transparent; border:2px solid ${tc.bg}; color:var(--text); width:68px; flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; box-sizing: border-box; transition: all 0.15s; opacity: 0.35;"
+                     title="${d.full_name || acronym}">
+                    ${getTeamLogoHtml(tName, '10px', null)}
+                    <span style="font-size:0.85rem; letter-spacing:0.05em; font-weight:700;">${acronym}</span>
+                </div>
+            `;
+        });
+        tilesHtml += `</div>`;
+
+        container.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
+                <div class="standings-title">Select Drivers to Compare (Max 3)</div>
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                    <span style="font-family:'Barlow Condensed'; font-size:0.8rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em;">Select Lap:</span>
+                    <select id="lap-comp-lap-select" class="theme-toggle" style="padding:0.4rem 0.75rem;" onchange="changeLapCompLap(this.value)">
+                        ${lapOptions}
+                    </select>
+                </div>
+            </div>
+            ${tilesHtml}
+            <div id="lap-comp-chart-area" style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem; min-height: 200px; transition: height 0.3s;">
+                <div style="text-align:center; color:var(--text-dim); padding: 3rem;">Select at least one driver above to view telemetry.</div>
+            </div>
+        `;
+
+        // --- INTERACTIVITY CONTROLLERS ---
+        window.toggleLapCompDriver = (dNum) => {
+            let sel = window.lapCompState.selected;
+            if (sel.includes(dNum)) {
+                sel = sel.filter(n => n !== dNum); // Deselect
+            } else {
+                if (sel.length >= 3) sel.shift(); // Remove the oldest selection if we hit the limit
+                sel.push(dNum);
+            }
+            window.lapCompState.selected = sel;
+
+            // Update Tile Visuals to indicate Baseline, 2nd, and 3rd selections
+            document.querySelectorAll('.lap-comp-tile').forEach(el => {
+                const id = parseInt(el.id.replace('lc-tile-', ''));
+                if (sel.includes(id)) {
+                    const idx = sel.indexOf(id);
+                    const d = activeDrivers.find(x => x.driver_number === id);
+                    const tc = teamColor(d.team_name);
+                    
+                    el.style.opacity = '1';
+                    if (idx === 0) { // Baseline
+                        el.style.background = tc.bg;
+                        el.style.color = tc.text;
+                        el.style.borderStyle = 'solid';
+                    } else { // Comparators
+                        el.style.background = 'transparent';
+                        el.style.color = 'var(--text)';
+                        el.style.borderStyle = idx === 1 ? 'dashed' : 'dotted';
+                    }
+                } else {
+                    el.style.opacity = '0.35';
+                    el.style.background = 'transparent';
+                    el.style.color = 'var(--text)';
+                    el.style.borderStyle = 'solid';
+                }
+            });
+
+            window.drawLapCompCharts();
+        };
+
+        window.changeLapCompLap = (lapNum) => {
+            window.lapCompState.lap = Number(lapNum);
+            window.drawLapCompCharts();
+        };
+
+        // --- CHART RENDERING ENGINE ---
+        window.drawLapCompCharts = async () => {
+            const chartArea = document.getElementById('lap-comp-chart-area');
+            const sel = window.lapCompState.selected;
+            const lapNum = window.lapCompState.lap;
+
+            if (sel.length === 0) {
+                chartArea.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding: 3rem;">Select at least one driver above to view telemetry.</div>`;
+                return;
+            }
+
+            chartArea.innerHTML = `<div class="loading" style="padding: 3rem;"><div class="spinner"></div>Fetching Telemetry for Lap ${lapNum}...</div>`;
+
+            try {
+                // THE FIX: Figure out who is a 2nd driver inherently so their line style is permanently anchored
+                const teamCounts = {};
+                activeDrivers.forEach(d => {
+                    const tName = d.team_name || 'Unknown';
+                    if (!teamCounts[tName]) teamCounts[tName] = 0;
+                    teamCounts[tName]++;
+                    d.isSecondDriver = teamCounts[tName] > 1;
+                });
+
+                const getTelemetry = async (dNum) => {
+                    const lap = allLaps.find(l => l.driver_number === dNum && l.lap_number === lapNum);
+                    if (!lap || !lap.lap_duration) return null;
+                    const startStr = encodeURIComponent(new Date(lap.date_start).toISOString());
+                    const endStr = encodeURIComponent(new Date(new Date(lap.date_start).getTime() + lap.lap_duration * 1000).toISOString());
+
+                    const [car, loc] = await Promise.all([
+                        fetchJSON(`${BASE}/car_data?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[]),
+                        fetchJSON(`${BASE}/location?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[])
+                    ]);
+                    return { lap, car, loc, dNum };
+                };
+
+                const dataResults = await Promise.all(sel.map(dNum => getTelemetry(dNum)));
+                const validData = dataResults.filter(d => d && d.car.length > 10);
+
+                if (validData.length === 0) {
+                    chartArea.innerHTML = `<div class="error-msg">Telemetry unavailable for selected drivers on Lap ${lapNum}.</div>`;
+                    return;
+                }
+
+                // Pass the data through the global spatial math processor!
+                const telemetryInput = validData.map(d => ({ lap: d.lap, car: d.car, loc: d.loc, dNum: d.dNum }));
+                
+                // Sort array so the FASTEST lap acts as the baseline (index 0)
+                telemetryInput.sort((a,b) => a.lap.lap_duration - b.lap.lap_duration);
+
+                const { chartLabels, uniformData, corners } = window.processTelemetryMath(telemetryInput);
+
+                // --- HEADER LAP TIME UI ---
+                const bestLapDuration = uniformData[0].lap.lap_duration;
+                let lapTimesHtml = `<div style="display:flex; justify-content:center; gap: 2.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">`;
+                
+                uniformData.forEach((ud, idx) => {
+                    const dInfo = activeDrivers.find(d => d.driver_number === ud.dNum);
+                    const tc = teamColor(dInfo.team_name);
+                    const lapTime = ud.lap.lap_duration;
+                    const isBest = lapTime === bestLapDuration;
+                    const gap = lapTime - bestLapDuration;
+
+                    const timeStr = fmtLapTime(lapTime);
+                    const gapStr = isBest ? '' : `<span style="font-size:0.85rem; color:var(--text-muted); font-weight:600; margin-left:6px;">(+${gap.toFixed(3)})</span>`;
+                    const fw = isBest ? '900' : '500';
+                    const borderStyle = dInfo.isSecondDriver ? 'dashed' : 'solid'; // Fixed to intrinsic team identity!
+
+                    lapTimesHtml += `
+                        <div style="display:flex; align-items:center; gap:0.5rem; font-family:'Barlow Condensed'; font-size:1.35rem; color:var(--text);">
+                            <div style="width:20px; height:8px; background:rgba(0,0,0,0.1); border: 2px ${borderStyle} ${tc.bg}; border-radius:2px;"></div>
+                            <span style="font-weight:700;">${dInfo.name_acronym}</span>
+                            <span style="font-weight:${fw}; margin-left: 0.25rem;">${timeStr}${gapStr}</span>
+                        </div>
+                    `;
+                });
+                lapTimesHtml += `</div>`;
+
+                const speedDatasets = [];
+                const deltaDatasets = [];
+
+                uniformData.forEach((ud, idx) => {
+                    const dInfo = activeDrivers.find(d => d.driver_number === ud.dNum);
+                    const tc = teamColor(dInfo.team_name);
+                    const borderDash = dInfo.isSecondDriver ? [5, 5] : []; // Fixed to intrinsic team identity!
+
+                    speedDatasets.push({
+                        label: dInfo.name_acronym,
+                        data: ud.speedData,
+                        borderColor: tc.bg,
+                        borderWidth: idx === 0 ? 3 : 2,
+                        borderDash: borderDash,
+                        pointRadius: 0,
+                        tension: 0.2
+                    });
+
+                    deltaDatasets.push({
+                        label: idx === 0 ? `Baseline (${dInfo.name_acronym})` : `${dInfo.name_acronym} Delta`,
+                        data: ud.deltaData,
+                        borderColor: tc.bg,
+                        borderWidth: idx === 0 ? 3 : 2,
+                        borderDash: borderDash,
+                        pointRadius: 0,
+                        tension: 0.2
+                    });
+                });
+
+                chartArea.innerHTML = `
+                    ${lapTimesHtml}
+                    <div id="lap-comp-wrapper" style="position:relative; width: 100%; cursor: crosshair;">
+                        <button id="lap-comp-reset" class="theme-toggle" style="display:none; position:absolute; top: -10px; right: 0px; z-index: 10; padding: 0.3rem 0.8rem; border-color: var(--accent); color: var(--accent);">Reset Zoom</button>
+                        <div id="lap-comp-brush" style="position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,0.15); border: 1px dashed rgba(255,255,255,0.5); pointer-events: none; display: none; z-index: 50;"></div>
+                        
+                        <div style="display:flex; justify-content:space-between; margin-bottom: 0.5rem; padding: 0 0.5rem;">
+                           <span style="font-family:'Barlow Condensed'; font-weight:700; color:var(--text-muted); font-size: 0.85rem;">SPEED (km/h)</span>
+                        </div>
+                        <div style="height: 300px; width: 100%; position: relative;"><canvas id="lap-comp-speed-chart"></canvas></div>
+                        
+                        <div style="display:flex; justify-content:space-between; margin-top: 1.5rem; margin-bottom: 0.5rem; padding: 0 0.5rem;">
+                           <span style="font-family:'Barlow Condensed'; font-weight:700; color:var(--text-muted); font-size: 0.85rem;">GAP TO BASELINE (s)</span>
+                        </div>
+                        <div style="height: 180px; width: 100%; position: relative;"><canvas id="lap-comp-delta-chart"></canvas></div>
+                    </div>
+                `;
+
+                const isLight = document.body.dataset.theme === 'light';
+                const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
+                const tickColor = isLight ? '#666' : '#aaa';
+                const markerLineColor = isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)';
+
+                const tooltipConfig = { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } };
+
+                const cornerMarkerPlugin = {
+                    id: 'cornerMarker',
+                    beforeDraw(chart) {
+                        const { ctx, chartArea } = chart;
+                        if (!chartArea || !corners.length) return;
+                        
+                        const meta = chart.getDatasetMeta(0);
+                        if (!meta || !meta.data || meta.data.length === 0) return;
+
+                        ctx.save();
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        ctx.font = 'bold 11px "Barlow Condensed"';
+                        ctx.fillStyle = tickColor;
+                        ctx.strokeStyle = markerLineColor;
+                        ctx.lineWidth = 1;
+                        ctx.setLineDash([3, 3]);
+
+                        corners.forEach(c => {
+                            const pt = meta.data[c.index];
+                            if (pt) {
+                                const xPos = pt.x;
+                                if (xPos >= chartArea.left && xPos <= chartArea.right) {
+                                    const isSpeedChart = chart.canvas.id === 'lap-comp-speed-chart';
+                                    ctx.beginPath();
+                                    ctx.moveTo(xPos, chartArea.top); 
+                                    ctx.lineTo(xPos, chartArea.bottom);
+                                    ctx.stroke();
+                                    if (isSpeedChart) {
+                                        ctx.fillText(c.text, xPos, chartArea.top - 4);
+                                    }
+                                }
+                            }
+                        });
+                        ctx.restore();
+                    }
+                };
+
+                const ctxSpeed = document.getElementById('lap-comp-speed-chart').getContext('2d');
+                if (window.lapCompState.chartInstSpeed) window.lapCompState.chartInstSpeed.destroy();
+                window.lapCompState.chartInstSpeed = new Chart(ctxSpeed, {
+                    type: 'line',
+                    data: { labels: chartLabels, datasets: speedDatasets },
+                    plugins: [cornerMarkerPlugin],
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        layout: { padding: { top: 20 } },
+                        plugins: { legend: { display: false }, tooltip: tooltipConfig },
+                        scales: {
+                            x: { display: false, grid: { color: gridColor } },
+                            y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'Barlow Condensed' } } }
+                        }
+                    }
+                });
+
+                const ctxDelta = document.getElementById('lap-comp-delta-chart').getContext('2d');
+                if (window.lapCompState.chartInstDelta) window.lapCompState.chartInstDelta.destroy();
+                window.lapCompState.chartInstDelta = new Chart(ctxDelta, {
+                    type: 'line',
+                    data: { labels: chartLabels, datasets: deltaDatasets },
+                    plugins: [cornerMarkerPlugin],
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { display: false }, tooltip: tooltipConfig },
+                        scales: {
+                            x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 15, font: { family: 'Barlow Condensed' } } },
+                            y: { reverse: true, grid: { color: gridColor }, ticks: { color: tickColor, font: { family: 'Barlow Condensed' } } }
+                        }
+                    }
+                });
+
+                // --- DRAG ZOOM LOGIC ---
+                const chartWrapper = document.getElementById('lap-comp-wrapper');
+                const brush = document.getElementById('lap-comp-brush');
+                const resetBtn = document.getElementById('lap-comp-reset');
+                
+                let isDragging = false;
+                let startX = 0;
+
+                chartWrapper.onmousedown = (e) => {
+                    isDragging = true;
+                    const rect = chartWrapper.getBoundingClientRect();
+                    startX = e.clientX - rect.left;
+                    brush.style.left = startX + 'px';
+                    brush.style.width = '0px';
+                    brush.style.display = 'block';
+                };
+
+                chartWrapper.onmousemove = (e) => {
+                    if (!isDragging) return;
+                    const rect = chartWrapper.getBoundingClientRect();
+                    const currentX = e.clientX - rect.left;
+                    brush.style.left = Math.min(startX, currentX) + 'px';
+                    brush.style.width = Math.abs(currentX - startX) + 'px';
+                };
+
+                const finishDrag = (e) => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    brush.style.display = 'none';
+
+                    const rect = chartWrapper.getBoundingClientRect();
+                    const endX = e.clientX - rect.left;
+                    
+                    const minPixelX = Math.min(startX, endX);
+                    const maxPixelX = Math.max(startX, endX);
+
+                    if (maxPixelX - minPixelX < 15) return;
+
+                    const chart = window.lapCompState.chartInstSpeed;
+                    if (!chart || !chart.chartArea) return;
+                    const area = chart.chartArea;
+
+                    let pctStart = (minPixelX - area.left) / area.width;
+                    let pctEnd = (maxPixelX - area.left) / area.width;
+                    
+                    pctStart = Math.max(0, Math.min(1, pctStart));
+                    pctEnd = Math.max(0, Math.min(1, pctEnd));
+
+                    const currentMin = chart.options.scales.x.min ?? 0;
+                    const currentMax = chart.options.scales.x.max ?? (chartLabels.length - 1);
+                    const currentRange = currentMax - currentMin;
+
+                    const newMin = Math.round(currentMin + pctStart * currentRange);
+                    const newMax = Math.round(currentMin + pctEnd * currentRange);
+
+                    if (newMax - newMin > 5) {
+                        window.lapCompState.chartInstSpeed.options.scales.x.min = newMin;
+                        window.lapCompState.chartInstSpeed.options.scales.x.max = newMax;
+                        window.lapCompState.chartInstSpeed.update('none');
+
+                        window.lapCompState.chartInstDelta.options.scales.x.min = newMin;
+                        window.lapCompState.chartInstDelta.options.scales.x.max = newMax;
+                        window.lapCompState.chartInstDelta.update('none');
+
+                        resetBtn.style.display = 'block';
+                    }
+                };
+
+                chartWrapper.onmouseup = finishDrag;
+                chartWrapper.onmouseleave = finishDrag;
+
+                resetBtn.onclick = () => {
+                    delete window.lapCompState.chartInstSpeed.options.scales.x.min;
+                    delete window.lapCompState.chartInstSpeed.options.scales.x.max;
+                    window.lapCompState.chartInstSpeed.update('none');
+
+                    delete window.lapCompState.chartInstDelta.options.scales.x.min;
+                    delete window.lapCompState.chartInstDelta.options.scales.x.max;
+                    window.lapCompState.chartInstDelta.update('none');
+
+                    resetBtn.style.display = 'none';
+                };
+
+            } catch(e) {
+                chartArea.innerHTML = `<div class="error-msg">Failed to render charts: ${e.message}</div>`;
+            }
+        };
+
+    } catch(e) {
+        container.innerHTML = `<div class="error-msg">Could not load Lap Comparisons: ${e.message}</div>`;
+    }
+}
+
 async function renderTrackDominance() {
   const container = document.getElementById('subtab-content-track-dominance');
   if (!container || !container.classList.contains('active')) return;
@@ -4833,54 +5688,11 @@ async function renderTrackDominance() {
     document.getElementById('dom-mini-sectors').innerHTML = tableHtml;
 
     // 8. BUILD TELEMETRY TRACE CHARTS
-    function processCarData(carArr, lapStartTime) {
-        if(!carArr || carArr.length === 0) return [];
-        let res = [];
-        let t0 = new Date(lapStartTime).getTime();
-        let currentDist = 0;
-        for(let i=0; i<carArr.length; i++) {
-            let c = carArr[i];
-            let t = (new Date(c.date).getTime() - t0) / 1000;
-            if(i > 0) {
-                let dt = t - res[i-1].time;
-                let v = ((c.speed + carArr[i-1].speed) / 2) / 3.6; // avg speed in m/s
-                currentDist += v * dt;
-            }
-            res.push({ time: t, speed: c.speed, dist: currentDist });
-        }
-        return res;
-    }
-
-    const processedA = processCarData(dataA.car, lapA.date_start);
-    const processedB = processCarData(dataB.car, lapB.date_start);
-
-    // Prepare GPS data for corner math
-    const processedLocA = dataA.loc.map(l => ({
-        time: (new Date(l.date).getTime() - new Date(lapA.date_start).getTime()) / 1000,
-        x: l.x,
-        y: l.y
-    }));
-
-    function getLocAtTime(arr, targetTime) {
-        let idx = arr.findIndex(item => item.time >= targetTime);
-        if(idx <= 0) return arr[0] || {x:0, y:0};
-        if(idx === -1) return arr[arr.length-1] || {x:0, y:0};
-        let p1 = arr[idx-1], p2 = arr[idx];
-        let fraction = (targetTime - p1.time) / (p2.time - p1.time);
-        if(isNaN(fraction) || !isFinite(fraction)) fraction = 0;
-        return { x: p1.x + fraction * (p2.x - p1.x), y: p1.y + fraction * (p2.y - p1.y) };
-    }
-
     const traceBody = document.getElementById('dom-trace-body');
     
-    if (processedA.length === 0 || processedB.length === 0) {
-        traceBody.innerHTML = `
-            <div style="padding:3rem 1rem; text-align:center; color:var(--text-dim);">
-                Detailed speed telemetry is currently unavailable from the API for these laps.
-            </div>
-        `;
+    if (dataA.car.length === 0 || dataB.car.length === 0) {
+        traceBody.innerHTML = `<div style="padding:3rem 1rem; text-align:center; color:var(--text-dim);">Detailed speed telemetry is currently unavailable from the API for these laps.</div>`;
     } else {
-        // --- NEW: HTML Wrapper setup for Drag-to-Zoom ---
         traceBody.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
                 <div style="display:flex; align-items:center; gap:1.5rem; font-family:'Barlow Condensed'; font-size:13px; font-weight:700; color:var(--text-muted); text-transform: uppercase;">
@@ -4904,50 +5716,17 @@ async function renderTrackDominance() {
             </div>
         `;
         
-        const maxDist = Math.min(processedA[processedA.length-1].dist, processedB[processedB.length-1].dist);
-        const NUM_POINTS = 300; 
-        const step = maxDist / NUM_POINTS;
+        // Pass data through our new universal math processor!
+        const telemetryInput = [
+            { lap: lapA, car: dataA.car, loc: dataA.loc, dNum: dNumA },
+            { lap: lapB, car: dataB.car, loc: dataB.loc, dNum: dNumB }
+        ];
+        
+        // Check if Driver B was faster, if so, make THEM the baseline so the delta math is intuitive
+        const fasterIsB = lapB.lap_duration < lapA.lap_duration;
+        if (fasterIsB) telemetryInput.reverse();
 
-        const chartLabels = [], speedA = [], speedB = [], deltaA = [], deltaB = [];
-        const trackX = [], trackY = [];
-        const fasterIsA = lapA.lap_duration <= lapB.lap_duration;
-
-        function getAtDist(arr, targetDist) {
-            let idx = arr.findIndex(item => item.dist >= targetDist);
-            if(idx === 0) return arr[0];
-            if(idx === -1) return arr[arr.length-1];
-            let p1 = arr[idx-1], p2 = arr[idx];
-            let fraction = (targetDist - p1.dist) / (p2.dist - p1.dist);
-            if(isNaN(fraction) || !isFinite(fraction)) fraction = 0;
-            return {
-                time: p1.time + fraction * (p2.time - p1.time),
-                speed: p1.speed + fraction * (p2.speed - p1.speed)
-            };
-        }
-
-        for(let i=0; i<=NUM_POINTS; i++) {
-            const d = i * step;
-            chartLabels.push((d/1000).toFixed(2) + 'km');
-            const ptA = getAtDist(processedA, d);
-            const ptB = getAtDist(processedB, d);
-
-            speedA.push(ptA.speed);
-            speedB.push(ptB.speed);
-
-            if (fasterIsA) {
-                deltaA.push(0); 
-                deltaB.push(ptB.time - ptA.time);
-            } else {
-                deltaB.push(0);
-                deltaA.push(ptA.time - ptB.time);
-            }
-
-            const locPt = getLocAtTime(processedLocA, ptA.time);
-            trackX.push(locPt.x);
-            trackY.push(locPt.y);
-        }
-
-        const corners = calculateTrackCorners(trackX, trackY);
+        const { chartLabels, uniformData, corners } = window.processTelemetryMath(telemetryInput);
 
         const isLight = document.body.dataset.theme === 'light';
         const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
@@ -4959,10 +5738,8 @@ async function renderTrackDominance() {
             beforeDraw(chart) {
                 const { ctx, chartArea } = chart;
                 if (!chartArea || !corners.length) return;
-                
                 const meta = chart.getDatasetMeta(0);
                 if (!meta || !meta.data || meta.data.length === 0) return;
-
                 ctx.save();
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'bottom';
@@ -4978,15 +5755,11 @@ async function renderTrackDominance() {
                         const xPos = pt.x;
                         if (xPos >= chartArea.left && xPos <= chartArea.right) {
                             const isSpeedChart = chart.canvas.id === 'dom-speed-chart';
-                            
                             ctx.beginPath();
                             ctx.moveTo(xPos, chartArea.top); 
                             ctx.lineTo(xPos, chartArea.bottom);
                             ctx.stroke();
-                            
-                            if (isSpeedChart) {
-                                ctx.fillText(c.text, xPos, chartArea.top - 4);
-                            }
+                            if (isSpeedChart) ctx.fillText(c.text, xPos, chartArea.top - 4);
                         }
                     }
                 });
@@ -4994,11 +5767,14 @@ async function renderTrackDominance() {
             }
         };
 
-        const dsSpeedA = { label: driverInfoA.name_acronym, data: speedA, borderColor: colorA, borderWidth: 2, pointRadius: 0, tension: 0.2 };
-        const dsSpeedB = { label: driverInfoB.name_acronym, data: speedB, borderColor: colorB, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        const dsAIndex = fasterIsB ? 1 : 0;
+        const dsBIndex = fasterIsB ? 0 : 1;
+
+        const dsSpeedA = { label: driverInfoA.name_acronym, data: uniformData[dsAIndex].speedData, borderColor: colorA, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        const dsSpeedB = { label: driverInfoB.name_acronym, data: uniformData[dsBIndex].speedData, borderColor: colorB, borderWidth: 2, pointRadius: 0, tension: 0.2 };
         
-        const dsDeltaA = { label: driverInfoA.name_acronym, data: deltaA, borderColor: colorA, borderWidth: 2, pointRadius: 0, tension: 0.2 };
-        const dsDeltaB = { label: driverInfoB.name_acronym, data: deltaB, borderColor: colorB, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        const dsDeltaA = { label: driverInfoA.name_acronym, data: uniformData[dsAIndex].deltaData, borderColor: colorA, borderWidth: 2, pointRadius: 0, tension: 0.2 };
+        const dsDeltaB = { label: driverInfoB.name_acronym, data: uniformData[dsBIndex].deltaData, borderColor: colorB, borderWidth: 2, pointRadius: 0, tension: 0.2 };
 
         if (isSameTeam) {
             dsSpeedB.borderDash = [5, 5];
@@ -5015,10 +5791,7 @@ async function renderTrackDominance() {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 layout: { padding: { top: 20 } }, 
-                plugins: { 
-                    legend: { display: false }, 
-                    tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
-                },
+                plugins: { legend: { display: false }, tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } } },
                 scales: {
                     x: { display: false, grid: { color: gridColor } },
                     y: { title: { display: true, text: 'Speed (km/h)', color: tickColor, font: { family: 'Barlow Condensed' } }, grid: { color: gridColor }, ticks: { color: tickColor } }
@@ -5035,10 +5808,7 @@ async function renderTrackDominance() {
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
-                plugins: { 
-                    legend: { display: false },
-                    tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
-                },
+                plugins: { legend: { display: false }, tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } } },
                 scales: {
                     x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 15, font: { family: 'Barlow Condensed' } } },
                     y: { reverse: true, title: { display: true, text: 'Gap (s)', color: tickColor, font: { family: 'Barlow Condensed' } }, grid: { color: gridColor }, ticks: { color: tickColor } }
@@ -5046,7 +5816,6 @@ async function renderTrackDominance() {
             }
         });
 
-        // --- NEW: Interactive Drag-to-Zoom Logic ---
         const chartWrapper = document.getElementById('dom-chart-wrapper');
         const brush = document.getElementById('dom-brush');
         const resetBtn = document.getElementById('dom-reset-zoom');
@@ -5082,18 +5851,15 @@ async function renderTrackDominance() {
             const minPixelX = Math.min(startX, endX);
             const maxPixelX = Math.max(startX, endX);
 
-            // Ignore accidental tiny clicks
             if (maxPixelX - minPixelX < 15) return;
 
             const chart = window.domSpeedChartInstance;
             if (!chart || !chart.chartArea) return;
             const area = chart.chartArea;
 
-            // Calculate percentage relative to the chart's plotting area boundaries
             let pctStart = (minPixelX - area.left) / area.width;
             let pctEnd = (maxPixelX - area.left) / area.width;
             
-            // Constrain constraints to actual chart bounds
             pctStart = Math.max(0, Math.min(1, pctStart));
             pctEnd = Math.max(0, Math.min(1, pctEnd));
 
@@ -5105,7 +5871,6 @@ async function renderTrackDominance() {
             const newMax = Math.round(currentMin + pctEnd * currentRange);
 
             if (newMax - newMin > 5) {
-                // Apply limits and instantly redraw without animation
                 window.domSpeedChartInstance.options.scales.x.min = newMin;
                 window.domSpeedChartInstance.options.scales.x.max = newMax;
                 window.domSpeedChartInstance.update('none');
