@@ -785,77 +785,96 @@ function fmtLapTime(secs) {
   return m > 0 ? `${m}:${s}` : `${s}`;
 }
 
-// Global Helper: Unify, interpolate, and perfectly align telemetry traces using GPS spatial mapping
+// Global Helper: Unify, interpolate, and perfectly align telemetry traces using normalized speed integration
 window.processTelemetryMath = function(dataArray, numPoints = 300) {
-    // 1. Process Raw GPS Distance
     const processed = dataArray.map(d => {
         const t0 = new Date(d.lap.date_start).getTime();
         
-        const sortedLoc = [...(d.loc || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
-        const locTrace = [];
-        let cum = 0;
-        sortedLoc.forEach((l, i) => {
-            const t = (new Date(l.date).getTime() - t0) / 1000;
-            if (i > 0) {
-                const prev = sortedLoc[i-1];
-                cum += Math.hypot(l.x - prev.x, l.y - prev.y); // Use spatial GPS to calculate true distance
-            }
-            locTrace.push({ time: t, rawDist: cum, x: l.x, y: l.y });
-        });
-        
+        // 1. Calculate pure Speed Integration (Bulletproof X-Axis)
         const sortedCar = [...(d.car || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
-        return { ...d, t0, locTrace, sortedCar, totalRawDist: cum };
+        const trace = [];
+        let cumDist = 0;
+        
+        // Compensate for API delay: if first ping is 0.5s after the line, calculate that missing distance!
+        if (sortedCar.length > 0) {
+            const firstT = (new Date(sortedCar[0].date).getTime() - t0) / 1000;
+            if (firstT > 0) {
+                cumDist = (sortedCar[0].speed / 3.6) * firstT;
+                trace.push({ time: 0, speed: sortedCar[0].speed, rawDist: 0 }); // Anchor at finish line
+            }
+        }
+
+        sortedCar.forEach((c, i) => {
+            const t = (new Date(c.date).getTime() - t0) / 1000;
+            if (t < -1) return; // Drop pre-lap noise
+            
+            if (i > 0) {
+                const prevCar = sortedCar[i-1];
+                const prevT = (new Date(prevCar.date).getTime() - t0) / 1000;
+                const dt = t - prevT;
+                if (dt > 0) {
+                    const v = ((c.speed + prevCar.speed) / 2) / 3.6; // average speed in m/s
+                    cumDist += v * dt;
+                }
+            }
+            trace.push({ time: t, speed: c.speed, rawDist: cumDist });
+        });
+
+        const rawTotalDist = trace.length > 0 ? trace[trace.length-1].rawDist : 1;
+        
+        // Normalize to a percentage of their own lap
+        trace.forEach(pt => {
+            pt.pct = pt.rawDist / (rawTotalDist || 1);
+        });
+
+        // 2. Prepare GPS strictly for Corner Mapping
+        const sortedLoc = [...(d.loc || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+        const locTrace = sortedLoc.map(l => ({
+            time: (new Date(l.date).getTime() - t0) / 1000,
+            x: l.x, y: l.y
+        }));
+
+        return { ...d, trace, locTrace, rawTotalDist };
     });
 
-    // 2. Finish Line Anchoring (Find max total dist to normalize Lap 1 grid slots)
-    const maxTotalDist = Math.max(...processed.map(p => p.totalRawDist));
+    // 3. Normalize all traces to the Baseline Driver's physical track length
+    // This perfectly stretches/squashes the data so the apexes sync and drift is eliminated!
+    const referenceDist = processed[0].rawTotalDist || 5000;
 
     processed.forEach(p => {
-        const offset = maxTotalDist - p.totalRawDist;
-        p.locTrace.forEach(l => { l.dist = l.rawDist + offset; });
-        
-        // Map Car speeds to precise GPS distances
-        p.trace = [];
-        p.sortedCar.forEach(c => {
-            const t = (new Date(c.date).getTime() - p.t0) / 1000;
-            if (t < -1) return; // drop noise
-            
-            let idx = p.locTrace.findIndex(item => item.time >= t);
-            let dist, x, y;
-            if(idx <= 0) {
-                dist = p.locTrace[0]?.dist || 0;
-                x = p.locTrace[0]?.x || 0;
-                y = p.locTrace[0]?.y || 0;
-            } else if(idx === -1) {
-                const last = p.locTrace[p.locTrace.length-1];
-                dist = last?.dist || 0;
-                x = last?.x || 0;
-                y = last?.y || 0;
-            } else {
-                let p1 = p.locTrace[idx-1], p2 = p.locTrace[idx];
-                let fraction = (t - p1.time) / (p2.time - p1.time) || 0;
-                dist = p1.dist + fraction * (p2.dist - p1.dist);
-                x = p1.x + fraction * (p2.x - p1.x);
-                y = p1.y + fraction * (p2.y - p1.y);
-            }
-            p.trace.push({ time: t, speed: c.speed, dist, x, y });
+        p.trace.forEach(pt => {
+            pt.normDist = pt.pct * referenceDist;
         });
     });
 
-    // 3. Uniform Resampling
-    const step = maxTotalDist / numPoints;
+    // 4. Uniform Resampling
+    // Trim the final 0.5% of the lap so the interpolation math never runs out of bounds and spikes!
+    const capDist = referenceDist * 0.995; 
+    const step = capDist / numPoints;
     const baseTrace = processed[0].trace;
+    const baseLoc = processed[0].locTrace;
 
     const getAtDist = (arr, targetDist) => {
-        if(arr.length === 0) return {time:0, speed:0, x:0, y:0};
-        let idx = arr.findIndex(item => item.dist >= targetDist);
+        if(arr.length === 0) return {time:0, speed:0};
+        let idx = arr.findIndex(item => item.normDist >= targetDist);
         if(idx <= 0) return arr[0];
         if(idx === -1) return arr[arr.length-1];
         let p1 = arr[idx-1], p2 = arr[idx];
-        let fraction = (targetDist - p1.dist) / (p2.dist - p1.dist) || 0;
+        let fraction = (targetDist - p1.normDist) / (p2.normDist - p1.normDist) || 0;
         return {
             time: p1.time + fraction * (p2.time - p1.time),
-            speed: p1.speed + fraction * (p2.speed - p1.speed),
+            speed: p1.speed + fraction * (p2.speed - p1.speed)
+        };
+    };
+
+    const getLocAtTime = (arr, t) => {
+        if (arr.length === 0) return {x:0, y:0};
+        let idx = arr.findIndex(item => item.time >= t);
+        if(idx <= 0) return arr[0];
+        if(idx === -1) return arr[arr.length-1];
+        let p1 = arr[idx-1], p2 = arr[idx];
+        let fraction = (t - p1.time) / (p2.time - p1.time) || 0;
+        return {
             x: p1.x + fraction * (p2.x - p1.x),
             y: p1.y + fraction * (p2.y - p1.y)
         };
@@ -868,11 +887,14 @@ window.processTelemetryMath = function(dataArray, numPoints = 300) {
 
     for (let i = 0; i <= numPoints; i++) {
         const targetDist = i * step;
-        chartLabels.push((targetDist / 1000).toFixed(2) + 'km');
+        chartLabels.push((targetDist / 1000).toFixed(2) + 'km'); // Properly scaled in km!
 
         const basePt = getAtDist(baseTrace, targetDist);
-        trackX.push(basePt.x);
-        trackY.push(basePt.y);
+        
+        // Only grab GPS from the baseline to define the corners
+        const locPt = getLocAtTime(baseLoc, basePt.time);
+        trackX.push(locPt.x);
+        trackY.push(locPt.y);
 
         uniformData.forEach((ud, idx) => {
             const pt = getAtDist(processed[idx].trace, targetDist);
@@ -881,7 +903,7 @@ window.processTelemetryMath = function(dataArray, numPoints = 300) {
         });
     }
 
-    const corners = calculateTrackCorners(trackX, trackY);
+    const corners = trackX.some(x => x !== 0) ? calculateTrackCorners(trackX, trackY) : [];
     return { chartLabels, uniformData, corners };
 };
 
@@ -4991,13 +5013,26 @@ async function renderLapComparisons(containerId) {
             return;
         }
 
+        // THE FIX: Permanently assign Line Styles based on Team Hierarchy to prevent spontaneous switching!
+        const teamDriverCounts = {};
+        activeDrivers.forEach(d => {
+            const tName = d.team_name || 'Unknown';
+            if (!teamDriverCounts[tName]) teamDriverCounts[tName] = 0;
+            teamDriverCounts[tName]++;
+            
+            if (teamDriverCounts[tName] === 1) d.lineStyle = 'solid';
+            else if (teamDriverCounts[tName] === 2) d.lineStyle = 'dashed';
+            else d.lineStyle = 'dotted';
+            
+            d.lineDashArray = d.lineStyle === 'solid' ? [] : (d.lineStyle === 'dashed' ? [6, 4] : [2, 2]);
+        });
+
         const maxLap = Math.max(...allLaps.map(l => l.lap_number || 0));
         let lapOptions = '';
         for (let i = 1; i <= maxLap; i++) {
             lapOptions += `<option value="${i}">Lap ${i}</option>`;
         }
 
-        // Global State for this specific tab
         window.lapCompState = {
             selected: [],
             lap: 1,
@@ -5012,13 +5047,14 @@ async function renderLapComparisons(containerId) {
             const tc = teamColor(tName);
             const acronym = d.name_acronym || d.last_name || `#${d.driver_number}`;
             
+            // Default Unselected State
             tilesHtml += `
                 <div class="lap-comp-tile" id="lc-tile-${d.driver_number}"
                      onclick="toggleLapCompDriver(${d.driver_number})"
-                     style="background:transparent; border:2px solid ${tc.bg}; color:var(--text); width:68px; flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; box-sizing: border-box; transition: all 0.15s; opacity: 0.35;"
+                     style="background:var(--surface); border:2px solid var(--border); color:var(--text-dim); width:72px; flex-shrink:0; height:32px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; box-sizing: border-box; transition: all 0.2s; opacity: 0.5; border-radius: 4px;"
                      title="${d.full_name || acronym}">
-                    ${getTeamLogoHtml(tName, '10px', null)}
-                    <span style="font-size:0.85rem; letter-spacing:0.05em; font-weight:700;">${acronym}</span>
+                    ${getTeamLogoHtml(tName, '12px', null)}
+                    <span style="font-size:0.9rem; letter-spacing:0.05em; font-weight:700;">${acronym}</span>
                 </div>
             `;
         });
@@ -5046,34 +5082,41 @@ async function renderLapComparisons(containerId) {
             if (sel.includes(dNum)) {
                 sel = sel.filter(n => n !== dNum); // Deselect
             } else {
-                if (sel.length >= 3) sel.shift(); // Remove the oldest selection if we hit the limit
+                if (sel.length >= 3) {
+                    // Update the UI for the dropped driver immediately
+                    const removedId = sel.shift(); 
+                    const el = document.getElementById(`lc-tile-${removedId}`);
+                    if (el) {
+                        el.style.opacity = '0.5';
+                        el.style.background = 'var(--surface)';
+                        el.style.borderColor = 'var(--border)';
+                        el.style.borderStyle = 'solid';
+                        el.style.color = 'var(--text-dim)';
+                    }
+                }
                 sel.push(dNum);
             }
             window.lapCompState.selected = sel;
 
-            // Update Tile Visuals to indicate Baseline, 2nd, and 3rd selections
+            // THE FIX: High Opacity Tinted Buttons with explicit line styles!
             document.querySelectorAll('.lap-comp-tile').forEach(el => {
                 const id = parseInt(el.id.replace('lc-tile-', ''));
+                const d = activeDrivers.find(x => x.driver_number === id);
+                if (!d) return;
+                const tc = teamColor(d.team_name);
+                
                 if (sel.includes(id)) {
-                    const idx = sel.indexOf(id);
-                    const d = activeDrivers.find(x => x.driver_number === id);
-                    const tc = teamColor(d.team_name);
-                    
                     el.style.opacity = '1';
-                    if (idx === 0) { // Baseline
-                        el.style.background = tc.bg;
-                        el.style.color = tc.text;
-                        el.style.borderStyle = 'solid';
-                    } else { // Comparators
-                        el.style.background = 'transparent';
-                        el.style.color = 'var(--text)';
-                        el.style.borderStyle = idx === 1 ? 'dashed' : 'dotted';
-                    }
-                } else {
-                    el.style.opacity = '0.35';
-                    el.style.background = 'transparent';
+                    el.style.background = `${tc.bg}22`; // Add a beautiful 13% opacity tint to the background
+                    el.style.borderStyle = d.lineStyle; 
+                    el.style.borderColor = tc.bg;
                     el.style.color = 'var(--text)';
+                } else {
+                    el.style.opacity = '0.5';
+                    el.style.background = 'var(--surface)';
                     el.style.borderStyle = 'solid';
+                    el.style.borderColor = 'var(--border)';
+                    el.style.color = 'var(--text-dim)';
                 }
             });
 
@@ -5099,15 +5142,6 @@ async function renderLapComparisons(containerId) {
             chartArea.innerHTML = `<div class="loading" style="padding: 3rem;"><div class="spinner"></div>Fetching Telemetry for Lap ${lapNum}...</div>`;
 
             try {
-                // THE FIX: Figure out who is a 2nd driver inherently so their line style is permanently anchored
-                const teamCounts = {};
-                activeDrivers.forEach(d => {
-                    const tName = d.team_name || 'Unknown';
-                    if (!teamCounts[tName]) teamCounts[tName] = 0;
-                    teamCounts[tName]++;
-                    d.isSecondDriver = teamCounts[tName] > 1;
-                });
-
                 const getTelemetry = async (dNum) => {
                     const lap = allLaps.find(l => l.driver_number === dNum && l.lap_number === lapNum);
                     if (!lap || !lap.lap_duration) return null;
@@ -5121,23 +5155,23 @@ async function renderLapComparisons(containerId) {
                     return { lap, car, loc, dNum };
                 };
 
-                const dataResults = await Promise.all(sel.map(dNum => getTelemetry(dNum)));
-                const validData = dataResults.filter(d => d && d.car.length > 10);
+                // THE FIX: Fetch sequentially to prevent the API from rate-limiting and dropping the 3rd driver!
+                const validData = [];
+                for (const dNum of sel) {
+                    const data = await getTelemetry(dNum);
+                    if (data && data.car && data.car.length > 10) validData.push(data);
+                }
 
                 if (validData.length === 0) {
                     chartArea.innerHTML = `<div class="error-msg">Telemetry unavailable for selected drivers on Lap ${lapNum}.</div>`;
                     return;
                 }
 
-                // Pass the data through the global spatial math processor!
                 const telemetryInput = validData.map(d => ({ lap: d.lap, car: d.car, loc: d.loc, dNum: d.dNum }));
-                
-                // Sort array so the FASTEST lap acts as the baseline (index 0)
                 telemetryInput.sort((a,b) => a.lap.lap_duration - b.lap.lap_duration);
 
                 const { chartLabels, uniformData, corners } = window.processTelemetryMath(telemetryInput);
 
-                // --- HEADER LAP TIME UI ---
                 const bestLapDuration = uniformData[0].lap.lap_duration;
                 let lapTimesHtml = `<div style="display:flex; justify-content:center; gap: 2.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">`;
                 
@@ -5151,11 +5185,11 @@ async function renderLapComparisons(containerId) {
                     const timeStr = fmtLapTime(lapTime);
                     const gapStr = isBest ? '' : `<span style="font-size:0.85rem; color:var(--text-muted); font-weight:600; margin-left:6px;">(+${gap.toFixed(3)})</span>`;
                     const fw = isBest ? '900' : '500';
-                    const borderStyle = dInfo.isSecondDriver ? 'dashed' : 'solid'; // Fixed to intrinsic team identity!
 
+                    // Use the permanent lineStyle instead of relying on the fastest lap index!
                     lapTimesHtml += `
                         <div style="display:flex; align-items:center; gap:0.5rem; font-family:'Barlow Condensed'; font-size:1.35rem; color:var(--text);">
-                            <div style="width:20px; height:8px; background:rgba(0,0,0,0.1); border: 2px ${borderStyle} ${tc.bg}; border-radius:2px;"></div>
+                            <div style="width:24px; height:0px; border-top: 4px ${dInfo.lineStyle} ${tc.bg}; display:inline-block; margin-bottom:4px;"></div>
                             <span style="font-weight:700;">${dInfo.name_acronym}</span>
                             <span style="font-weight:${fw}; margin-left: 0.25rem;">${timeStr}${gapStr}</span>
                         </div>
@@ -5169,14 +5203,13 @@ async function renderLapComparisons(containerId) {
                 uniformData.forEach((ud, idx) => {
                     const dInfo = activeDrivers.find(d => d.driver_number === ud.dNum);
                     const tc = teamColor(dInfo.team_name);
-                    const borderDash = dInfo.isSecondDriver ? [5, 5] : []; // Fixed to intrinsic team identity!
 
                     speedDatasets.push({
                         label: dInfo.name_acronym,
                         data: ud.speedData,
                         borderColor: tc.bg,
-                        borderWidth: idx === 0 ? 3 : 2,
-                        borderDash: borderDash,
+                        borderWidth: idx === 0 ? 3 : 2, // Keep the baseline slightly thicker
+                        borderDash: dInfo.lineDashArray, // Use intrinsic permanent dashes
                         pointRadius: 0,
                         tension: 0.2
                     });
@@ -5186,7 +5219,7 @@ async function renderLapComparisons(containerId) {
                         data: ud.deltaData,
                         borderColor: tc.bg,
                         borderWidth: idx === 0 ? 3 : 2,
-                        borderDash: borderDash,
+                        borderDash: dInfo.lineDashArray,
                         pointRadius: 0,
                         tension: 0.2
                     });
@@ -5290,7 +5323,6 @@ async function renderLapComparisons(containerId) {
                     }
                 });
 
-                // --- DRAG ZOOM LOGIC ---
                 const chartWrapper = document.getElementById('lap-comp-wrapper');
                 const brush = document.getElementById('lap-comp-brush');
                 const resetBtn = document.getElementById('lap-comp-reset');
