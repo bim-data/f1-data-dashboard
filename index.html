@@ -298,10 +298,10 @@
         <div class="view-title" id="season-title-text">2026 Formula One World Championship</div>
         <div class="view-sub" id="season-sub">Loading calendar...</div>
         
-        <div id="season-main-tabs" class="subtabs">
-          <button class="subtab-btn active" id="season-tab-btn-weekends" onclick="switchSeasonTab('weekends')">Race Weekends</button>
-          <button class="subtab-btn" id="season-tab-btn-summary" onclick="switchSeasonTab('summary')">Season Summary</button>
-          <button class="subtab-btn" id="season-tab-btn-testing" onclick="switchSeasonTab('testing')">Pre-Season Testing</button>      
+        <div id="season-main-tabs" class="session-tabs">
+          <button class="session-tab-btn active" id="season-tab-btn-weekends" onclick="switchSeasonTab('weekends')">Race Weekends</button>
+          <button class="session-tab-btn" id="season-tab-btn-summary" onclick="switchSeasonTab('summary')">Season Summary</button>
+          <button class="session-tab-btn" id="season-tab-btn-testing" onclick="switchSeasonTab('testing')">Pre-Season Testing</button>      
         </div>
 
         <div id="season-tab-content-weekends" class="subtab-content active">
@@ -311,11 +311,24 @@
         </div>
 
         <div id="season-tab-content-summary" class="subtab-content">
-          <div id="season-summary-leaders" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-            <div class="loading" style="grid-column: 1 / -1; padding: 2rem;"><div class="spinner"></div>Loading championship leaders...</div>
+          <div class="subtabs" id="season-summary-subtabs" style="margin-bottom: 1.5rem;">
+            <button class="subtab-btn active" id="season-summary-tab-btn-championship" onclick="switchSeasonSummaryTab('championship')">Championship Battle</button>
+            <button class="subtab-btn" id="season-summary-tab-btn-engines" onclick="switchSeasonSummaryTab('engines')">Engine Suppliers</button>
           </div>
-          <div id="season-championship-battle-area" style="color:var(--text-dim); padding:2rem 1rem; text-align:center;">
-             Championship battle timeline coming soon...
+
+          <div id="season-summary-tab-content-championship" class="subtab-content active">
+            <div id="season-summary-leaders" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+              <div class="loading" style="grid-column: 1 / -1; padding: 2rem;"><div class="spinner"></div>Loading championship leaders...</div>
+            </div>
+            <div id="season-championship-battle-area" style="color:var(--text-dim); padding:2rem 1rem; text-align:center;">
+               Championship battle timeline coming soon...
+            </div>
+          </div>
+
+          <div id="season-summary-tab-content-engines" class="subtab-content">
+            <div id="season-engines-area" style="color:var(--text-dim); padding:2rem 1rem; text-align:center;">
+              Engine Suppliers coming soon...
+            </div>
           </div>
         </div>
 
@@ -864,7 +877,7 @@ function goHome() {
   currentSession = null;
   updateBreadcrumb();
   showView('view-season');
-  switchSeasonTab('weekends'); // <--- ADD THIS
+  switchSeasonTab('weekends');
 }
 
 function toggleTheme() {
@@ -902,6 +915,8 @@ function changeYear(year) {
   if (viewTitle) viewTitle.textContent = `${currentYear} Formula One World Championship`;
   goHome();
   document.getElementById('season-grid').innerHTML = `<div class="loading"><div class="spinner"></div>Fetching calendar</div>`;
+  document.getElementById('season-summary-leaders').innerHTML = `<div class="loading" style="grid-column: 1 / -1; padding: 2rem;"><div class="spinner"></div>Loading championship leaders...</div>`;
+  document.getElementById('season-championship-battle-area').innerHTML = `Championship battle timeline coming soon...`;
   document.getElementById('standings-drivers').innerHTML = `<div class="standings-header"><span class="standings-title">Drivers</span></div><div class="loading" style="padding:2rem 1rem"><div class="spinner"></div></div>`;
   document.getElementById('standings-constructors').innerHTML = `<div class="standings-header"><span class="standings-title">Constructors</span></div><div class="loading" style="padding:2rem 1rem"><div class="spinner"></div></div>`;
   document.getElementById('season-sub').textContent = 'Loading calendar...';
@@ -930,13 +945,32 @@ function switchDriverSubTab(tabId) {
 }
 
 function switchSeasonTab(tabId) {
-  document.querySelectorAll('#season-main-tabs .subtab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('#season-main-tabs .session-tab-btn').forEach(btn => btn.classList.remove('active'));
   const activeBtn = document.getElementById(`season-tab-btn-${tabId}`);
   if (activeBtn) activeBtn.classList.add('active');
 
-  document.querySelectorAll('#view-season .subtab-content').forEach(content => content.classList.remove('active'));
+  document.querySelectorAll('#view-season > .subtab-content').forEach(content => content.classList.remove('active'));
   const activeContent = document.getElementById(`season-tab-content-${tabId}`);
   if (activeContent) activeContent.classList.add('active');
+
+  // Auto-activate the championship subtab when summary tab opens
+  if (tabId === 'summary') {
+    switchSeasonSummaryTab('championship');
+  }
+}
+
+function switchSeasonSummaryTab(tabId) {
+  document.querySelectorAll('#season-summary-subtabs .subtab-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`season-summary-tab-btn-${tabId}`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  document.querySelectorAll('#season-tab-content-summary .subtab-content').forEach(content => content.classList.remove('active'));
+  const activeContent = document.getElementById(`season-summary-tab-content-${tabId}`);
+  if (activeContent) activeContent.classList.add('active');
+
+  if (tabId === 'engines') {
+    renderEngineSuppliers();
+  }
 }
 
 function updateDriverSubTabsForSession() {
@@ -1860,6 +1894,440 @@ setTimeout(() => {
         console.error(e);
         champArea.innerHTML = `<div class="error-msg">Could not load championship timeline: ${e.message}</div>`;
     }
+}
+
+// Build engine → [team names] map from TEAM_INFO
+function getEngineMap() {
+  const map = {}; // engine → [teamName]
+  for (const [teamName, info] of Object.entries(TEAM_INFO)) {
+    const eng = info.engine;
+    if (!eng) continue;
+    if (!map[eng]) map[eng] = [];
+    if (!map[eng].includes(teamName)) map[eng].push(teamName);
+  }
+  return map;
+}
+
+// Given a team name from the API, find its engine supplier
+function getEngineForTeam(apiTeamName) {
+  if (!apiTeamName) return null;
+  // Exact match first
+  if (TEAM_INFO[apiTeamName]) return TEAM_INFO[apiTeamName].engine;
+  // Fuzzy match
+  for (const [k, v] of Object.entries(TEAM_INFO)) {
+    if (apiTeamName.includes(k) || k.includes(apiTeamName)) return v.engine;
+  }
+  return null;
+}
+
+const ENGINE_COLORS = {
+  'Mercedes': '#27F4D2',
+  'Ferrari':  '#E8002D',
+  'Honda':    '#cc0000',
+  'RBPT / Ford': '#3671C6',
+  'Audi':     '#bb0000',
+};
+
+function engineColor(eng) {
+  return ENGINE_COLORS[eng] || '#888888';
+}
+
+let engineSuppliersLoaded = false;
+
+async function renderEngineSuppliers() {
+  const container = document.getElementById('season-engines-area');
+  if (!container) return;
+
+  // Only fetch data once per session
+  if (engineSuppliersLoaded) return;
+  engineSuppliersLoaded = false; // will set true after success
+
+  container.innerHTML = `<div class="loading"><div class="spinner"></div>Loading engine data...</div>`;
+
+  try {
+    const pastMeetings = allMeetings.filter(m => !m.is_testing && new Date(m.date_end) < NOW)
+      .sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+
+    if (pastMeetings.length === 0) {
+      container.innerHTML = `<div style="padding:2rem; color:var(--text-dim); text-align:center;">No completed races yet.</div>`;
+      return;
+    }
+
+    // Get latest race session key to fetch driver/team info
+    const lastMeeting = pastMeetings[pastMeetings.length - 1];
+    const latestSessions = await fetchJSON(`${BASE}/sessions?meeting_key=${lastMeeting.meeting_key}`);
+    const raceSession = latestSessions.filter(s => s.session_name.toLowerCase() === 'race').pop()
+      || latestSessions[latestSessions.length - 1];
+
+    const [allDrivers, champData, teamChampData] = await Promise.all([
+      fetchJSON(`${BASE}/drivers?session_key=${raceSession.session_key}`).catch(() => []),
+      fetchJSON(`${BASE}/championship_drivers?session_key=${raceSession.session_key}`).catch(() => []),
+      fetchJSON(`${BASE}/championship_teams?session_key=${raceSession.session_key}`).catch(() => []),
+    ]);
+
+    // Build engine → {wins, podiums, teams, points} from team standings + results
+    const engineStats = {}; // engine → {wins, podiums, points, teams: Set}
+
+    const allYearSessions = await fetchJSON(`${BASE}/sessions?year=${currentYear}`);
+    const raceSessions = allYearSessions.filter(s => {
+      const n = s.session_name.toLowerCase();
+      return n === 'race' && new Date(s.date_start) < NOW;
+    });
+
+    // Tally wins/podiums per engine across all races
+    for (const s of raceSessions) {
+      const [results, sessionDrivers] = await Promise.all([
+        fetchJSON(`${BASE}/session_result?session_key=${s.session_key}`).catch(() => []),
+        fetchJSON(`${BASE}/drivers?session_key=${s.session_key}`).catch(() => []),
+      ]);
+      const driverTeamMap = {};
+      sessionDrivers.forEach(d => { driverTeamMap[d.driver_number] = d.team_name; });
+
+      results.forEach(r => {
+        const teamName = driverTeamMap[r.driver_number];
+        const eng = getEngineForTeam(teamName);
+        if (!eng) return;
+        if (!engineStats[eng]) engineStats[eng] = { wins: 0, podiums: 0, teams: new Set() };
+        engineStats[eng].teams.add(teamName);
+        if (r.position === 1) engineStats[eng].wins++;
+        if (r.position <= 3) engineStats[eng].podiums++;
+      });
+    }
+
+    // Also tally points from team championship
+    teamChampData.forEach(t => {
+      const eng = getEngineForTeam(t.team_name);
+      if (!eng) return;
+      if (!engineStats[eng]) engineStats[eng] = { wins: 0, podiums: 0, teams: new Set() };
+      engineStats[eng].teams.add(t.team_name);
+      engineStats[eng].points = (engineStats[eng].points || 0) + (t.points_current || 0);
+    });
+
+    const engines = Object.keys(engineStats).sort((a, b) =>
+      (engineStats[b].points || 0) - (engineStats[a].points || 0)
+    );
+
+    const isLight = document.body.dataset.theme === 'light';
+    const surfaceColor = isLight ? '#f8f8f6' : '#1a1a1a';
+    const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+    const textColor = isLight ? '#444' : '#888';
+    const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+
+    // ── HEADER: engine tiles ──────────────────────────────────
+    // Map engine → logo from its primary team
+    const ENGINE_LOGO_MAP = {
+      'Mercedes':    { logo: './assets/logos/Mercedes.svg',           invert: false },
+      'Ferrari':     { logo: './assets/logos/Ferrari-Scuderia-Logo.png', invert: false },
+      'Honda':       { logo: './assets/logos/aston-martin.png',        invert: true  },
+      'RBPT / Ford': { logo: './assets/logos/red-bull-racing.png',     invert: false },
+      'Audi':        { logo: './assets/logos/Audi.svg',                invert: true  },
+    };
+
+    let headerHtml = `<div style="display:grid; grid-template-columns: repeat(${engines.length}, 1fr); gap:1rem; margin-bottom:2.5rem;">`;
+    engines.forEach(eng => {
+      const s = engineStats[eng];
+      const color = engineColor(eng);
+      const logoInfo = ENGINE_LOGO_MAP[eng];
+      const logoHtml = logoInfo
+        ? `<img src="${logoInfo.logo}" class="${logoInfo.invert ? 'invert-dark' : ''}" style="height:28px; width:auto; max-width:48px; object-fit:contain; display:block; margin-bottom:0.6rem;">`
+        : '';
+
+      headerHtml += `
+        <div style="background:var(--surface); border:2px solid ${color}22; border-top: 3px solid ${color}; border-radius:4px; padding:1.25rem 1.5rem;">
+          ${logoHtml}
+          <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; font-weight:900; text-transform:uppercase; color:var(--text); margin-bottom:0.75rem; letter-spacing:0.04em; line-height:1.1;">${eng}</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.5rem;">
+            <div>
+              <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Wins</div>
+              <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${s.wins}</div>
+            </div>
+            <div>
+              <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Podiums</div>
+              <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${s.podiums}</div>
+            </div>
+            <div>
+              <div style="font-size:0.6rem; color:var(--text-dim); font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:2px;">Pts</div>
+              <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800; line-height:1;">${s.points || 0}</div>
+            </div>
+          </div>
+        </div>`;
+    });
+    headerHtml += `</div>`;
+
+    // ── RACE ROWS ─────────────────────────────────────────────
+    let racesHtml = `<div class="standings-title" style="margin-bottom:1rem;">Race Weekend Performance</div>`;
+    racesHtml += `<div style="display:flex; flex-direction:column; gap:0.5rem;" id="engine-races-list">`;
+
+    pastMeetings.forEach((m, idx) => {
+      const flagUrl = m.country_name
+        ? `https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${getCountryCode(m.country_name)}.svg`
+        : '';
+      const flagHtml = flagUrl
+        ? `<img src="${flagUrl}" style="width:20px; height:auto; border-radius:2px; box-shadow:0 1px 3px rgba(0,0,0,0.2); margin-right:8px; vertical-align:middle; display:inline-block;">`
+        : '';
+      let cleanName = (m.meeting_official_name || m.meeting_name).replace(/FORMULA 1/i, '').trim().replace(/\s*\d{4}$/, '').trim();
+
+      racesHtml += `
+        <div>
+          <div class="driver-row" style="grid-template-columns: 3rem 1fr; cursor:pointer;"
+               onclick="toggleEngineRaceViolins(${m.meeting_key}, this)">
+            <div style="font-family:'Barlow Condensed',sans-serif; color:var(--text-dim); font-weight:700; font-size:0.85rem;">Race ${m.race_week}</div>
+            <div style="display:flex; flex-direction:column; justify-content:center;">
+              <div style="font-weight:700; font-family:'Barlow Condensed',sans-serif; font-size:1.1rem; text-transform:uppercase; display:flex; align-items:center;">
+                ${flagHtml}${cleanName}
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+                ${fmtDate(m.date_start)} – ${fmtDate(m.date_end)}
+              </div>
+            </div>
+          </div>
+          <div id="engine-violin-${m.meeting_key}" style="display:none; margin-top:0.25rem; margin-bottom:0.5rem;"></div>
+        </div>`;
+    });
+
+    racesHtml += `</div>`;
+
+    container.innerHTML = headerHtml + racesHtml;
+    engineSuppliersLoaded = true;
+
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = `<div class="error-msg">Could not load engine data: ${e.message}</div>`;
+  }
+}
+
+// Track which race violin panels are open so we don't re-render
+const engineViolinCache = {};
+
+async function toggleEngineRaceViolins(meetingKey, rowEl) {
+  const panel = document.getElementById(`engine-violin-${meetingKey}`);
+  if (!panel) return;
+
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+
+  // Already rendered
+  if (engineViolinCache[meetingKey]) return;
+  engineViolinCache[meetingKey] = true;
+
+  panel.innerHTML = `<div class="loading"><div class="spinner"></div>Loading lap data...</div>`;
+
+  try {
+    const sessions = await fetchJSON(`${BASE}/sessions?meeting_key=${meetingKey}`);
+    const raceSession = sessions.filter(s => s.session_name.toLowerCase() === 'race').pop();
+    if (!raceSession) {
+      panel.innerHTML = `<div class="error-msg">No race session found.</div>`;
+      return;
+    }
+
+    const [allLaps, allStints, sessionDrivers] = await Promise.all([
+      fetchJSON(`${BASE}/laps?session_key=${raceSession.session_key}`).catch(() => []),
+      fetchJSON(`${BASE}/stints?session_key=${raceSession.session_key}`).catch(() => []),
+      fetchJSON(`${BASE}/drivers?session_key=${raceSession.session_key}`).catch(() => []),
+    ]);
+
+    // Map driver → team → engine
+    const driverEngineMap = {};
+    const driverTeamMap = {};
+    sessionDrivers.forEach(d => {
+      driverTeamMap[d.driver_number] = d.team_name;
+      driverEngineMap[d.driver_number] = getEngineForTeam(d.team_name);
+    });
+
+    // Map stints
+    const stintMap = {};
+    allStints.forEach(s => {
+      if (!stintMap[s.driver_number]) stintMap[s.driver_number] = [];
+      stintMap[s.driver_number].push(s);
+    });
+
+    function isScLap(lapNum, scPeriods) {
+      return scPeriods.some(p => lapNum >= Math.floor(p.startLap) && lapNum <= Math.ceil(p.endLap));
+    }
+
+    // Get SC periods for leader
+    const leaderLaps = allLaps.filter(l => {
+      const pos = sessionDrivers.find(d => d.driver_number === l.driver_number);
+      return pos;
+    }).filter(l => l.date_start).sort((a,b) => a.lap_number - b.lap_number);
+
+    // Build engine → [times] and engine → {drivers}
+    const engineLaps = {}; // engine → { times: [], driverTimes: {driverNum: []} }
+
+    allLaps.forEach(l => {
+      if (!l.lap_duration || l.lap_duration <= 0 || l.is_pit_out_lap) return;
+      const eng = driverEngineMap[l.driver_number];
+      if (!eng) return;
+      if (!engineLaps[eng]) engineLaps[eng] = { times: [], driverTimes: {} };
+      if (!engineLaps[eng].driverTimes[l.driver_number]) engineLaps[eng].driverTimes[l.driver_number] = [];
+      engineLaps[eng].times.push(l.lap_duration);
+      engineLaps[eng].driverTimes[l.driver_number].push(l.lap_duration);
+    });
+
+    // Clean outliers per engine
+    function cleanTimes(times) {
+      const sorted = [...times].sort((a,b) => a-b);
+      const median = sorted[Math.floor(sorted.length/2)];
+      return sorted.filter(t => t <= median * 1.12 && t > 0);
+    }
+
+    const engines = Object.keys(engineLaps).filter(e => engineLaps[e].times.length > 2);
+    if (engines.length === 0) {
+      panel.innerHTML = `<div style="padding:1rem; color:var(--text-dim);">No lap data available.</div>`;
+      return;
+    }
+
+    // Compute stats per engine
+    const engStats = {};
+    let globalMin = Infinity, globalMax = -Infinity;
+
+    engines.forEach(eng => {
+      const clean = cleanTimes(engineLaps[eng].times);
+      if (clean.length === 0) return;
+      const mean = clean.reduce((a,b) => a+b,0) / clean.length;
+      const sorted = [...clean];
+      engStats[eng] = {
+        times: clean,
+        mean,
+        median: sorted[Math.floor(sorted.length/2)],
+        q1: sorted[Math.floor(sorted.length*0.25)],
+        q3: sorted[Math.floor(sorted.length*0.75)],
+        min: sorted[0],
+        max: sorted[sorted.length-1],
+      };
+      globalMin = Math.min(globalMin, sorted[0]);
+      globalMax = Math.max(globalMax, sorted[sorted.length-1]);
+    });
+
+    const validEngines = engines.filter(e => engStats[e]).sort((a,b) => engStats[a].mean - engStats[b].mean);
+    const bestMean = engStats[validEngines[0]]?.mean || 0;
+
+    // SVG layout
+    const isLight = document.body.dataset.theme === 'light';
+    const surfaceColor = isLight ? '#f8f8f6' : '#1a1a1a';
+    const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+    const tickColor = isLight ? '#444' : '#888';
+    const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+
+    const yPad = (globalMax - globalMin) * 0.1 || 1;
+    const yMin = globalMin - yPad;
+    const yMax = globalMax + yPad;
+
+    const BOX_W = 100;
+    const BOX_GAP = 60;
+    const LEFT_PAD = 80;
+    const RIGHT_PAD = 20;
+    const TOP_PAD = 20;
+    const BOTTOM_PAD = 72;
+    const CHART_H = 320;
+
+    const svgWidth = LEFT_PAD + validEngines.length * (BOX_W + BOX_GAP) + RIGHT_PAD;
+    const svgHeight = CHART_H + TOP_PAD + BOTTOM_PAD;
+
+    function yPx(val) {
+      return TOP_PAD + (1 - (val - yMin) / (yMax - yMin)) * CHART_H;
+    }
+
+    function gaussianKDE(x, data, bw) {
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (x - data[i]) / bw;
+        sum += Math.exp(-0.5 * v * v);
+      }
+      return sum / (data.length * bw * Math.sqrt(2 * Math.PI));
+    }
+
+    let svgContent = '';
+
+    // Y grid lines
+    const numTicks = 6;
+    for (let i = 0; i <= numTicks; i++) {
+      const val = yMin + (i / numTicks) * (yMax - yMin);
+      const y = yPx(val);
+      svgContent += `<line x1="${LEFT_PAD}" y1="${y}" x2="${svgWidth - RIGHT_PAD}" y2="${y}" stroke="${gridColor}" stroke-width="1"/>`;
+      svgContent += `<text x="${LEFT_PAD - 6}" y="${y + 4}" text-anchor="end" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="11">${fmtLapTime(val)}</text>`;
+    }
+
+    validEngines.forEach((eng, i) => {
+      const s = engStats[eng];
+      const color = engineColor(eng);
+      const cx = LEFT_PAD + i * (BOX_W + BOX_GAP) + BOX_W / 2 + BOX_GAP / 2;
+
+      // Violin curve via KDE
+      const bw = 0.4;
+      const steps = 100;
+      const stepSize = (yMax - yMin) / steps;
+      const densities = [];
+      let maxDensity = 0;
+      for (let j = 0; j <= steps; j++) {
+        const v = yMin + j * stepSize;
+        const d = gaussianKDE(v, s.times, bw);
+        densities.push({ v, d });
+        if (d > maxDensity) maxDensity = d;
+      }
+
+      let pathD = '';
+      for (let j = 0; j <= steps; j++) {
+        const pt = densities[j];
+        const px = cx + (pt.d / maxDensity) * (BOX_W / 2);
+        const py = yPx(pt.v);
+        pathD += j === 0 ? `M ${px} ${py} ` : `L ${px} ${py} `;
+      }
+      for (let j = steps; j >= 0; j--) {
+        const pt = densities[j];
+        const px = cx - (pt.d / maxDensity) * (BOX_W / 2);
+        const py = yPx(pt.v);
+        pathD += `L ${px} ${py} `;
+      }
+      pathD += 'Z';
+      svgContent += `<path d="${pathD}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5"/>`;
+
+      // Scatter dots
+      s.times.forEach(t => {
+        const py = yPx(t);
+        const jitter = (Math.random() - 0.5) * (BOX_W * 0.35);
+        svgContent += `<circle cx="${cx + jitter}" cy="${py}" r="2" fill="${color}" opacity="0.6"/>`;
+      });
+
+      // IQR box + median
+      const iqrW = 10;
+      svgContent += `<rect x="${cx - iqrW/2}" y="${yPx(s.q3)}" width="${iqrW}" height="${Math.max(1, yPx(s.q1) - yPx(s.q3))}" fill="${color}" stroke="${color}" stroke-width="1"/>`;
+      svgContent += `<circle cx="${cx}" cy="${yPx(s.median)}" r="4" fill="var(--bg)" stroke="${color}" stroke-width="2"/>`;
+
+      // Engine label badge
+      const badgeY = svgHeight - BOTTOM_PAD + 12;
+      const badgeW = BOX_W;
+      const badgeH = 26;
+      svgContent += `<rect x="${cx - badgeW/2}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="3" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5"/>`;
+      svgContent += `<text x="${cx}" y="${badgeY + 17}" text-anchor="middle" fill="${color}" font-family="Barlow Condensed,sans-serif" font-size="13" font-weight="800">${eng}</text>`;
+
+      // Avg time
+      svgContent += `<text x="${cx}" y="${badgeY + 42}" text-anchor="middle" fill="${tickColor}" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="700">Avg: ${fmtLapTime(s.mean)}</text>`;
+
+      // Gap
+      const gap = s.mean - bestMean;
+      const gapText = gap < 0.001 ? 'Fastest' : `+${gap.toFixed(3)}s`;
+      const gapColor = gap < 0.001 ? '#c87eff' : tickColor;
+      svgContent += `<text x="${cx}" y="${badgeY + 56}" text-anchor="middle" fill="${gapColor}" font-family="Barlow Condensed,sans-serif" font-size="11" font-weight="600">${gapText}</text>`;
+    });
+
+    panel.innerHTML = `
+      <div style="background:${surfaceColor}; border:1px solid ${borderColor}; border-radius:4px; overflow-x:auto; margin-bottom:0.5rem;">
+        <svg width="${svgWidth}" height="${svgHeight}" style="display:block; min-width:${Math.min(svgWidth, 400)}px;">
+          ${svgContent}
+        </svg>
+      </div>`;
+
+  } catch (e) {
+    console.error(e);
+    panel.innerHTML = `<div class="error-msg">Could not load data: ${e.message}</div>`;
+    engineViolinCache[meetingKey] = false;
+  }
 }
 
 async function loadSeason() {
