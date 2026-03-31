@@ -60,18 +60,24 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Serve static files
-  let filePath = pathname === '/' ? '/index.html' : pathname;
-  filePath = path.join(__dirname, filePath);
+// --- FIXED STATIC FILE SERVING ---
+  let relativePath = pathname === '/' ? '/index.html' : pathname;
+  // Ensure we are looking in the correct directory
+  const filePath = path.join(__dirname, relativePath);
+  const ext = path.extname(filePath).toLowerCase();
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
+      console.log(`❌ File not found: ${filePath}`);
       res.writeHead(404);
       res.end('Not found');
       return;
     }
-    const ext = path.extname(filePath);
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'text/plain' });
+    
+    // Explicitly grab the MIME type. If extension is '.js', this MUST be 'text/javascript'
+    const contentType = MIME[ext] || 'text/plain';
+    
+    res.writeHead(200, { 'Content-Type': contentType });
     res.end(data);
   });
 });

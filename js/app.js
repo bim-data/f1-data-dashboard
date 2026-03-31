@@ -220,6 +220,15 @@ window.changeYear = async function(year) {
     document.getElementById('season-grid').innerHTML = `<div class="loading"><div class="spinner"></div>Fetching calendar</div>`;
     document.getElementById('season-summary-leaders').innerHTML = `<div class="loading" style="grid-column: 1 / -1; padding: 2rem;"><div class="spinner"></div>Loading championship leaders...</div>`;
     document.getElementById('season-championship-battle-area').innerHTML = `Championship battle timeline coming soon...`;
+    
+    // --- THE FIX: WIPE THE ENGINE SUPPLIER CACHE ---
+    engineSuppliersLoaded = false;
+    window.cachedEngineStats = null;
+    window.sessionEngineDataCache = {};
+    const engineArea = document.getElementById('season-engines-area');
+    if (engineArea) engineArea.innerHTML = `<div class="loading"><div class="spinner"></div>Loading engine data...</div>`;
+    // -----------------------------------------------
+
     document.getElementById('standings-drivers').innerHTML = `<div class="standings-header"><span class="standings-title">Drivers</span></div><div class="loading" style="padding:2rem 1rem"><div class="spinner"></div></div>`;
     document.getElementById('standings-constructors').innerHTML = `<div class="standings-header"><span class="standings-title">Constructors</span></div><div class="loading" style="padding:2rem 1rem"><div class="spinner"></div></div>`;
     document.getElementById('season-sub').textContent = 'Loading calendar...';
@@ -229,8 +238,17 @@ window.changeYear = async function(year) {
 };
 
 async function startApp() {
+    if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+    }
+    
+    // --- THE FIX: Force the dropdown to sync with the JS state on refresh! ---
+    const yearSelect = document.getElementById('year-select');
+    if (yearSelect) yearSelect.value = currentYear;
+
     await API.loadLocalDB(currentYear);
     window.loadSeason();
+    window.scrollTo(0, 0);
 }
 
 // --- SEASON LOADING & RENDERING ---
@@ -356,6 +374,12 @@ window.loadStandings = async function() {
 
         const driverInfoMap = {};
         for (const d of allDrivers) driverInfoMap[d.driver_number] = d;
+
+        // --- THE FIX: Inject missing mid-season drivers! ---
+        Object.keys(Constants.HISTORICAL_DRIVERS).forEach(num => {
+            if (!driverInfoMap[num]) driverInfoMap[num] = Constants.HISTORICAL_DRIVERS[num];
+        });
+        // ---------------------------------------------------
 
         const sortedDrivers = [...driverStandings].sort((a, b) => a.position_current - b.position_current);
         const sortedTeams = [...teamStandings].sort((a, b) => a.position_current - b.position_current);
@@ -832,6 +856,17 @@ window.renderChampionshipBattle = async function(allYearSessions, sortedDrivers,
 
 function getEngineForTeam(apiTeamName) {
     if (!apiTeamName) return null;
+    
+    // --- THE FIX: HISTORICAL ENGINE OVERRIDES (2025 & Earlier) ---
+    if (currentYear <= 2025) {
+        const name = apiTeamName.toLowerCase();
+        if (name.includes('alpine') || name.includes('renault')) return 'Renault';
+        if (name.includes('aston martin') || name.includes('racing point')) return 'Mercedes';
+        if (name.includes('red bull') || name.includes('alphatauri') || name === 'rb' || name.includes('racing bulls')) return 'Honda RBPT';
+        if (name.includes('alfa romeo') || name.includes('sauber')) return 'Ferrari';
+    }
+
+    // 2026+ Defaults
     if (Constants.TEAM_INFO[apiTeamName]) return Constants.TEAM_INFO[apiTeamName].engine;
     for (const [k, v] of Object.entries(Constants.TEAM_INFO)) {
         if (apiTeamName.includes(k) || k.includes(apiTeamName)) return v.engine;
@@ -846,12 +881,22 @@ window.renderEngineTiles = function(drilldownEngine) {
     const engineStats = window.cachedEngineStats;
     const engines = Object.keys(engineStats).sort((a, b) => (engineStats[b].points || 0) - (engineStats[a].points || 0));
 
+    // --- THE FIX: YEAR-AWARE LOGO MAPPING ---
     const ENGINE_LOGO_MAP = {
       'Mercedes':    { logo: './assets/logos/Mercedes.svg',           invert: false },
       'Ferrari':     { logo: './assets/logos/Ferrari-Scuderia-Logo.png', invert: false },
-      'Honda':       { logo: './assets/logos/aston-martin.png',        invert: true  },
+      'Honda':       { logo: currentYear <= 2025 ? './assets/logos/red-bull-racing.png' : './assets/logos/aston-martin.png', invert: currentYear > 2025 },
+      'Honda RBPT':  { logo: './assets/logos/red-bull-racing.png',     invert: false },
       'RBPT / Ford': { logo: './assets/logos/red-bull-racing.png',     invert: false },
       'Audi':        { logo: './assets/logos/Audi.svg',                invert: true  },
+      'Renault':     { logo: './assets/logos/apline.png',              invert: true  } // Use Alpine logo for Renault
+    };
+
+    // Inject dynamic colors for the historical engines without touching constants.js
+    const getEngineColor = (eng) => {
+        if (eng === 'Renault') return '#E5D54D'; // Renault Yellow
+        if (eng === 'Honda RBPT') return '#3671C6'; // RB Blue
+        return Utils.engineColor(eng);
     };
 
     let html = '';
@@ -860,7 +905,7 @@ window.renderEngineTiles = function(drilldownEngine) {
         html += `<div style="display:grid; grid-template-columns: repeat(${engines.length}, 1fr); gap:1rem; margin-bottom:2.5rem;">`;
         engines.forEach(eng => {
             const s = engineStats[eng];
-            const color = Utils.engineColor(eng);
+            const color = getEngineColor(eng); // Use the new dynamic color
             const logoInfo = ENGINE_LOGO_MAP[eng];
 
             const logoHtml = logoInfo
@@ -868,7 +913,6 @@ window.renderEngineTiles = function(drilldownEngine) {
               : '';
 
             const teamList = Array.from(s.teams);
-            
             const onClick = teamList.length === 1 
               ? `openTeamProfile('${teamList[0].replace(/'/g, "\\'")}')`
               : `renderEngineTiles('${eng}')`;
@@ -919,7 +963,7 @@ window.renderEngineTiles = function(drilldownEngine) {
             const hoverEvents = `onmouseover="this.style.borderColor='${tColor.bg}88'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='${tColor.bg}22'; this.style.transform='translateY(0)';"`;
 
             html += `
-              <div style="background:var(--surface); border:2px solid ${tColor.bg}22; border-top: 3px solid ${tColor.bg}; border-radius:4px; padding:1.25rem 1rem; text-align:center; ${hoverHtml}" ${hoverEvents} onclick="openTeamProfile('${safeName}')">
+              <div style="background:var(--surface); border:2px solid ${tColor.bg}22; border-top: 3px solid ${tColor.bg}; border-radius:4px; padding:1.25rem 1rem; text-align:center; ${hoverHtml}" ${hoverEvents} onclick="window.openTeamProfile('${safeName}')">
                 ${logoHtml}
                 <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; font-weight:900; text-transform:uppercase; color:var(--text); margin-bottom:0.75rem; letter-spacing:0.04em; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${teamName}">${shortName}</div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.5rem;">
@@ -943,7 +987,6 @@ window.renderEngineTiles = function(drilldownEngine) {
 
     wrapper.innerHTML = html;
 };
-
 window.renderEngineSuppliers = async function() {
     const container = document.getElementById('season-engines-area');
     if (!container) return;
@@ -3312,8 +3355,12 @@ window.openDriverProfile = async function(driverNumber) {
         const latestSessions = await API.fetchJSON(`${Constants.BASE}/sessions?meeting_key=${latestMeeting.meeting_key}`);
         const latestSessionKey = latestSessions[latestSessions.length-1].session_key;
 
+        // --- THE FIX: Inject Historical Fallback for missing profile data ---
         const driverInfoArr = await API.fetchJSON(`${Constants.BASE}/drivers?session_key=${latestSessionKey}&driver_number=${driverNumber}`);
-        const driverObj = driverInfoArr[0] || { full_name: `Driver #${driverNumber}`, team_name: 'Unknown', country_code: '' };
+        let driverObj = driverInfoArr[0];
+        if (!driverObj) {
+            driverObj = Constants.HISTORICAL_DRIVERS[driverNumber] || { full_name: `Driver #${driverNumber}`, team_name: 'Unknown', country_code: '' };
+        }
 
         const tc = Utils.teamColor(driverObj.team_name);
         
@@ -3383,7 +3430,15 @@ window.openDriverProfile = async function(driverNumber) {
                 isRace ? API.fetchJSON(`${Constants.BASE}/championship_drivers?session_key=${s.session_key}`).catch(() => []) : Promise.resolve([]),
                 API.fetchJSON(`${Constants.BASE}/laps?session_key=${s.session_key}`).catch(() => [])
             ]);
+            
             const myRaceLaps = allSessionLaps.filter(l => l.driver_number === driverNumber);
+            const dResult = resultData.find(r => r.driver_number === driverNumber);
+
+            // --- THE FIX: Skip this session completely if the driver wasn't in the car! ---
+            if (!dResult && myRaceLaps.length === 0) {
+                continue; 
+            }
+            // ------------------------------------------------------------------------------
 
             const meeting = allMeetings.find(m => m.meeting_key === s.meeting_key);
             const roundText = meeting ? (meeting.is_testing ? 'TEST' : `Race ${meeting.race_week}`) : '';
@@ -3412,7 +3467,6 @@ window.openDriverProfile = async function(driverNumber) {
                 const validLaps = myRaceLaps.filter(l => l.lap_duration && l.lap_duration > 0);
                 if (validLaps.length === 0) myPos = 'DNS';
                 else {
-                    const dResult = resultData.find(r => r.driver_number === driverNumber);
                     if (dResult) {
                         const status = (dResult.status || '').toUpperCase();
                         if (status.includes('DSQ') || status.includes('DISQUALIFIED')) myPos = 'DSQ';
@@ -3432,7 +3486,6 @@ window.openDriverProfile = async function(driverNumber) {
                 const myChamp = allChampDrivers.find(c => c.driver_number === driverNumber);
                 if (myChamp) ptsGained = (myChamp.points_current || 0) - (myChamp.points_start || 0);
             } else {
-                const dResult = resultData.find(r => r.driver_number === driverNumber);
                 if (dResult && dResult.position) myPos = dResult.position;
                 else myPos = '-';
                 
@@ -3497,7 +3550,7 @@ window.openDriverProfile = async function(driverNumber) {
             const meetingKeyId = meeting ? meeting.meeting_key : null;
 
             const rowHtml = `
-                <div class="driver-row" style="grid-template-columns: 2.5rem 1fr auto;" onclick="openProfileSessionDetail(${driverNumber}, ${meetingKeyId}, ${s.session_key})">
+                <div class="driver-row" style="grid-template-columns: 2.5rem 1fr auto;" onclick="window.openProfileSessionDetail(${driverNumber}, ${meetingKeyId}, ${s.session_key})">
                     <div style="font-family:'Barlow Condensed', sans-serif; color:var(--text-dim); font-weight:700;">${roundText}</div>
                     
                     <div style="display:flex; flex-direction:column; justify-content:center;">
@@ -3610,11 +3663,16 @@ window.viewDriverDetails = async function(driverNumber) {
         });
     }
 
+    // --- THE FIX: Inject Historical Fallback for telemetry view ---
     let driverObj = orderedDriversList.find(d => d.driver_number === driverNumber);
     if (!driverObj) {
         const sessionDrivers = await API.fetchJSON(`${Constants.BASE}/drivers?session_key=${currentSession.session_key}`);
         orderedDriversList = sessionDrivers;
         driverObj = orderedDriversList.find(d => d.driver_number === driverNumber);
+        
+        if (!driverObj) {
+            driverObj = Constants.HISTORICAL_DRIVERS[driverNumber] || { full_name: `Driver #${driverNumber}`, team_name: 'Unknown', country_code: '' };
+        }
     }
 
     window.updateDriverHeader('detail-driver-title', driverObj);
@@ -4241,6 +4299,213 @@ window.renderRacePositionChart = async function(containerId, driverNumber) {
         };
 
     } catch (e) { console.error("Position Chart Error:", e); }
+};
+
+// --- MISSING TEAM PROFILE VIEW ---
+window.openTeamProfile = async function(teamName) {
+    // Close any open mobile standings modals automatically
+    document.querySelectorAll('.standings-panel').forEach(p => p.classList.remove('mobile-modal-active'));
+    document.body.style.overflow = '';
+    
+    window.showView('view-team-profile');
+    window.switchTeamSubTab('results'); 
+    
+    const list = document.getElementById('profile-team-results-list');
+    const statsBar = document.getElementById('profile-team-stats-bar');
+    const driversContainer = document.getElementById('profile-team-drivers');
+    
+    list.innerHTML = `<div class="loading"><div class="spinner"></div>Loading team profile...</div>`;
+    statsBar.innerHTML = ''; 
+    driversContainer.innerHTML = '';
+
+    let tInfo = Constants.TEAM_INFO[teamName];
+    if (!tInfo) {
+        for (const [k, v] of Object.entries(Constants.TEAM_INFO)) {
+            if (teamName.includes(k) || k.includes(teamName)) { tInfo = v; break; }
+        }
+    }
+    if (!tInfo) tInfo = { full: teamName, principal: 'N/A', base: 'N/A' };
+
+    const teamHero = document.querySelector('#view-team-profile .session-hero');
+    const logoClass = tInfo.invert ? 'invert-dark' : '';
+    const logoHtml = tInfo.logo 
+        ? `<img src="${tInfo.logo}" referrerpolicy="no-referrer" crossorigin="anonymous" class="${logoClass}" style="height:38px; width:auto; max-width: 60px; object-fit:contain; margin-right:1.25rem; display:block;">` 
+        : '';
+
+    teamHero.innerHTML = `
+        <div style="display:flex; align-items:center;">
+            ${logoHtml}
+            <div>
+                <div class="session-hero-name" id="profile-team-title">${tInfo.full}</div>
+                <div class="session-hero-sub" id="profile-team-base">${tInfo.base}</div>
+            </div>
+        </div>
+    `;
+
+    try {
+        const pastMeetings = allMeetings.filter(m => new Date(m.date_end) < NOW);
+        if(pastMeetings.length === 0) {
+            list.innerHTML = `<div style="text-align:center; padding: 2rem; color:var(--text-dim);">No completed races yet.</div>`;
+            return;
+        }
+
+        const latestMeeting = pastMeetings[pastMeetings.length - 1];
+        const latestSessions = await API.fetchJSON(`${Constants.BASE}/sessions?meeting_key=${latestMeeting.meeting_key}`);
+        const latestSessionKey = latestSessions[latestSessions.length-1].session_key;
+
+        const [allDriversLatest, champDrivers, champTeams] = await Promise.all([
+            API.fetchJSON(`${Constants.BASE}/drivers?session_key=${latestSessionKey}`),
+            API.fetchJSON(`${Constants.BASE}/championship_drivers?session_key=${latestSessionKey}`).catch(()=>[]),
+            API.fetchJSON(`${Constants.BASE}/championship_teams?session_key=${latestSessionKey}`).catch(()=>[])
+        ]);
+
+        let totalTeamPoints = 0;
+        const myTeamChamp = champTeams.find(t => t.team_name === teamName);
+        if (myTeamChamp) totalTeamPoints = myTeamChamp.points_current;
+
+        const teamDrivers = allDriversLatest.filter(d => d.team_name === teamName).map(d => {
+            const cd = champDrivers.find(c => c.driver_number === d.driver_number);
+            return { ...d, points_current: cd ? cd.points_current : 0 };
+        }).sort((a,b) => {
+            const rankA = championshipRanks[a.driver_number] ?? 999;
+            const rankB = championshipRanks[b.driver_number] ?? 999;
+            if (rankA !== rankB) return rankA - rankB;
+            return a.driver_number - b.driver_number;
+        }).slice(0, 2);
+
+        const tc = Utils.teamColor(teamName);
+        driversContainer.innerHTML = teamDrivers.map(d => `
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1.25rem; display:flex; align-items:center; gap:1.25rem; cursor:pointer; transition: transform 0.15s, border-color 0.15s;" 
+                 onmouseover="this.style.borderColor='var(--border-hover)'; this.style.transform='translateY(-2px)';" 
+                 onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)';"
+                 onclick="openDriverProfile(${d.driver_number})">
+                <div class="driver-num-badge" style="background:${tc.bg}; color:${tc.text}; font-size:1.4rem; width:48px; height:48px; border-radius:4px;">${d.driver_number}</div>
+                <div style="flex:1;">
+                    <div style="font-family:'Barlow Condensed', sans-serif; font-size:1.4rem; font-weight:700; text-transform:uppercase;">${d.full_name || d.last_name}</div>
+                    <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600;">${d.points_current} pts</div>
+                </div>
+                <div style="color:var(--text-dim); font-size: 1.5rem;">›</div>
+            </div>
+        `).join('');
+
+        const allYearSessions = await API.fetchJSON(`${Constants.BASE}/sessions?year=${currentYear}`);
+        const targetSessions = allYearSessions.filter(s => {
+            const n = (s.session_name || '').toLowerCase();
+            return (n === 'race' || n === 'sprint') && new Date(s.date_start) < NOW;
+        }).sort((a,b) => new Date(a.date_start) - new Date(b.date_start)); 
+
+        let raceWins = 0, podiums = 0, dnfs = 0, dnss = 0, dsqs = 0;
+        const rowHtmls = [];
+
+        for (const s of targetSessions) {
+            const [resultData, allChampDrivers, lapData1, lapData2] = await Promise.all([
+                API.fetchJSON(`${Constants.BASE}/session_result?session_key=${s.session_key}`).catch(() => []),
+                API.fetchJSON(`${Constants.BASE}/championship_drivers?session_key=${s.session_key}`).catch(() => []),
+                teamDrivers[0] ? API.fetchJSON(`${Constants.BASE}/laps?session_key=${s.session_key}&driver_number=${teamDrivers[0].driver_number}`).catch(() => []) : Promise.resolve([]),
+                teamDrivers[1] ? API.fetchJSON(`${Constants.BASE}/laps?session_key=${s.session_key}&driver_number=${teamDrivers[1].driver_number}`).catch(() => []) : Promise.resolve([])
+            ]);
+
+            const getFinalPos = (dNum, lapData) => {
+                const validLaps = lapData ? lapData.filter(l => l.lap_duration && l.lap_duration > 0) : [];
+                let finalPos = 'DNF';
+                if (validLaps.length === 0) {
+                    finalPos = 'DNS';
+                } else {
+                    const dResult = resultData.find(r => r.driver_number === dNum);
+                    if (dResult) {
+                        const pos = dResult.position;
+                        const status = (dResult.status || '').toUpperCase();
+                        if (status.includes('DSQ') || status.includes('DISQUALIFIED')) {
+                            finalPos = 'DSQ';
+                        } else if (pos) {
+                            if (status !== 'FINISHED' && !status.includes('LAP') && status !== '') {
+                                finalPos = 'DNF';
+                            } else {
+                                finalPos = pos;
+                            }
+                        }
+                    }
+                }
+                return finalPos;
+            };
+
+            const d1Pos = teamDrivers[0] ? getFinalPos(teamDrivers[0].driver_number, lapData1) : null;
+            const d2Pos = teamDrivers[1] ? getFinalPos(teamDrivers[1].driver_number, lapData2) : null;
+            const isSprint = s.session_name.toLowerCase().includes('sprint');
+
+            [d1Pos, d2Pos].forEach(pos => {
+                if (pos !== null) {
+                    if (pos === 'DNF') dnfs++;
+                    else if (pos === 'DNS') dnss++;
+                    else if (pos === 'DSQ') dsqs++;
+                    else if (!isSprint && typeof pos === 'number') {
+                        if (pos === 1) raceWins++;
+                        if (pos <= 3) podiums++;
+                    }
+                }
+            });
+
+            let ptsGained = 0;
+            if (allChampDrivers && allChampDrivers.length > 0) {
+                if (teamDrivers[0]) {
+                     const c1 = allChampDrivers.find(c => c.driver_number === teamDrivers[0].driver_number);
+                     if (c1) ptsGained += (c1.points_current || 0) - (c1.points_start || 0);
+                }
+                if (teamDrivers[1]) {
+                     const c2 = allChampDrivers.find(c => c.driver_number === teamDrivers[1].driver_number);
+                     if (c2) ptsGained += (c2.points_current || 0) - (c2.points_start || 0);
+                }
+            }
+
+            const meeting = allMeetings.find(m => m.meeting_key === s.meeting_key);
+            const roundText = meeting ? (meeting.is_testing ? 'TEST' : `Race ${meeting.race_week}`) : '';
+            const dateString = meeting ? `${Utils.fmtDate(meeting.date_start)} - ${Utils.fmtDate(meeting.date_end)}` : '';
+            const badgeHtml = isSprint ? `<span style="background:#E87D2B; color:#fff; font-size:0.6rem; padding:2px 4px; border-radius:2px; margin-left:8px; vertical-align:middle;">SPRINT</span>` : '';
+
+            const flagUrl = meeting && meeting.country_name ? `https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/${Utils.getCountryCode(meeting.country_name)}.svg` : '';
+            const flagHtml = flagUrl ? `<img src="${flagUrl}" style="width:20px; height:auto; border-radius:2px; box-shadow:0 1px 3px rgba(0,0,0,0.2); margin-right:8px; vertical-align:middle; display:inline-block;">` : '';
+
+            rowHtmls.push(`
+                <div class="driver-row" style="grid-template-columns: 2.5rem 1fr auto;" onclick="window.selectMeeting(${meeting.meeting_key})">
+                    <div style="font-family:'Barlow Condensed', sans-serif; color:var(--text-dim); font-weight:700;">${roundText}</div>
+                    
+                    <div style="display:flex; flex-direction:column; justify-content:center;">
+                        <div style="font-weight:700; font-family:'Barlow Condensed', sans-serif; font-size:1.1rem; text-transform:uppercase; display:flex; align-items:center;">
+                            ${flagHtml}${meeting ? meeting.meeting_name : 'Unknown'} ${badgeHtml}
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+                            ${dateString}
+                        </div>
+                    </div>
+
+                    <div style="display:flex; align-items:center; gap: 2.5rem; text-align:right;">
+                        <div style="min-width: 4rem; display:flex; flex-direction:column; align-items:flex-end;">
+                            <span style="font-size:0.55rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px; font-family:'Barlow Condensed', sans-serif;">Points Gained</span>
+                            <div class="driver-pts-gained${ptsGained === 0 ? ' zero' : ''}" style="display:inline-block; font-size:0.9rem; padding: 2px 6px;">
+                                ${ptsGained > 0 ? '+' : ''}${ptsGained}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `);
+        }
+
+        list.innerHTML = rowHtmls.join('');
+
+        statsBar.innerHTML = `
+            <div class="stat"><div class="stat-label">Team Principal</div><div class="stat-value" style="color:var(--text);">${tInfo.principal}</div></div>
+            <div class="stat"><div class="stat-label">Power Unit</div><div class="stat-value" style="color:var(--text);">${tInfo.engine || 'Unknown'}</div></div>
+            <div class="stat"><div class="stat-label">Total Points</div><div class="stat-value">${totalTeamPoints}</div></div>
+            <div class="stat"><div class="stat-label">Wins</div><div class="stat-value">${raceWins}</div></div>
+            <div class="stat"><div class="stat-label">Podiums</div><div class="stat-value">${podiums}</div></div>
+            ${dnfs > 0 ? `<div class="stat"><div class="stat-label" style="color: var(--accent);">DNF</div><div class="stat-value">${dnfs}</div></div>` : ''}
+            ${dnss > 0 ? `<div class="stat"><div class="stat-label" style="color: var(--text-muted);">DNS</div><div class="stat-value">${dnss}</div></div>` : ''}
+            ${dsqs > 0 ? `<div class="stat"><div class="stat-label" style="color: var(--accent);">DSQ</div><div class="stat-value">${dsqs}</div></div>` : ''}
+        `;
+
+    } catch (e) {
+        list.innerHTML = `<div class="error-msg">Could not load team profile. ${e.message}</div>`;
+    }
 };
 
 startApp();
