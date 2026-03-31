@@ -785,80 +785,159 @@ function fmtLapTime(secs) {
   return m > 0 ? `${m}:${s}` : `${s}`;
 }
 
-// Global Helper: Unify, interpolate, and perfectly align telemetry traces using normalized speed integration
+// Global Helper: Unify, interpolate, and perfectly align telemetry traces using Piecewise Dual-Anchoring
 window.processTelemetryMath = function(dataArray, numPoints = 300) {
     const processed = dataArray.map(d => {
-        const t0 = new Date(d.lap.date_start).getTime();
-        
-        // 1. Calculate pure Speed Integration (Bulletproof X-Axis)
-        const sortedCar = [...(d.car || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
-        const trace = [];
-        let cumDist = 0;
-        
-        // Compensate for API delay: if first ping is 0.5s after the line, calculate that missing distance!
-        if (sortedCar.length > 0) {
-            const firstT = (new Date(sortedCar[0].date).getTime() - t0) / 1000;
-            if (firstT > 0) {
-                cumDist = (sortedCar[0].speed / 3.6) * firstT;
-                trace.push({ time: 0, speed: sortedCar[0].speed, rawDist: 0 }); // Anchor at finish line
-            }
-        }
+        let locTrace = [];
+        let trace = [];
+        let t0 = new Date(d.lap.date_start).getTime();
 
-        sortedCar.forEach((c, i) => {
-            const t = (new Date(c.date).getTime() - t0) / 1000;
-            if (t < -1) return; // Drop pre-lap noise
-            
-            if (i > 0) {
-                const prevCar = sortedCar[i-1];
-                const prevT = (new Date(prevCar.date).getTime() - t0) / 1000;
-                const dt = t - prevT;
-                if (dt > 0) {
-                    const v = ((c.speed + prevCar.speed) / 2) / 3.6; // average speed in m/s
-                    cumDist += v * dt;
+        if (d.isFastF1) {
+            locTrace = d.trace.map(pt => ({ time: pt.time, x: pt.x, y: pt.y }));
+            trace = d.trace.map(pt => ({...pt}));
+        } else {
+            // OpenF1 Fallback Integration
+            const sortedCar = [...(d.car || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+            let cumDist = 0;
+            if (sortedCar.length > 0) {
+                const firstT = (new Date(sortedCar[0].date).getTime() - t0) / 1000;
+                if (firstT > 0) {
+                    cumDist = (sortedCar[0].speed / 3.6) * firstT;
+                    trace.push({ time: 0, speed: sortedCar[0].speed, rawDist: 0 }); 
                 }
             }
-            trace.push({ time: t, speed: c.speed, rawDist: cumDist });
-        });
+            sortedCar.forEach((c, i) => {
+                const t = (new Date(c.date).getTime() - t0) / 1000;
+                if (t < -1) return; 
+                if (i > 0) {
+                    const prevCar = sortedCar[i-1];
+                    const prevT = (new Date(prevCar.date).getTime() - t0) / 1000;
+                    const dt = t - prevT;
+                    if (dt > 0) {
+                        const v = ((c.speed + prevCar.speed) / 2) / 3.6; 
+                        cumDist += v * dt;
+                    }
+                }
+                trace.push({ time: t, speed: c.speed, rawDist: cumDist });
+            });
+
+            const sortedLoc = [...(d.loc || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+            locTrace = sortedLoc.map(l => ({
+                time: (new Date(l.date).getTime() - t0) / 1000,
+                x: l.x, y: l.y
+            }));
+        }
+
+        // --- BULLETPROOF LAP 1 TRIMMER & TURN 1 FINDER ---
+        let t1ApexDist = 0;
+        if ((d.lap.lap_number === 1 || d.lap.is_pit_out_lap) && trace.length > 0) {
+            
+            // 1. Find the FIRST time the car reaches 100 km/h (Guaranteed to be the opening straight!)
+            let first100Idx = 0;
+            for (let i = 0; i < trace.length; i++) {
+                if (trace[i].speed > 100) {
+                    first100Idx = i;
+                    break;
+                }
+            }
+
+            // 2. Walk backward to find the exact grid box (clutch drop < 5 km/h)
+            let launchIdx = 0;
+            for (let i = first100Idx; i >= 0; i--) {
+                if (trace[i].speed < 5) {
+                    launchIdx = i;
+                    break;
+                }
+            }
+
+            // 3. Trim off the formation lap garbage!
+            if (launchIdx > 0) {
+                const distOffset = trace[launchIdx].rawDist;
+                const timeOffset = trace[launchIdx].time;
+                trace = trace.slice(launchIdx);
+                trace.forEach(pt => {
+                    pt.rawDist -= distOffset;
+                    pt.time -= timeOffset;
+                });
+                
+                locTrace = locTrace.filter(l => l.time >= timeOffset);
+                locTrace.forEach(l => l.time -= timeOffset);
+            }
+
+            // 4. Safely find the Turn 1 Apex
+            let peakIdx = 0;
+            let maxSpd = 0;
+            // Scan forward to find the top speed before the first braking zone
+            for (let i = 0; i < Math.min(trace.length, 1000); i++) {
+                if (trace[i].speed > maxSpd) {
+                    maxSpd = trace[i].speed;
+                    peakIdx = i;
+                }
+                // If they drop 30 km/h from max speed, they have hit the brakes for Turn 1!
+                if (maxSpd > 150 && trace[i].speed < maxSpd - 30) break;
+            }
+
+            // Find the deepest part of that braking zone (The Apex)
+            let minSpd = maxSpd;
+            let apexIdx = peakIdx;
+            for (let i = peakIdx; i < Math.min(trace.length, peakIdx + 500); i++) {
+                if (!trace[i]) break;
+                if (trace[i].speed < minSpd) {
+                    minSpd = trace[i].speed;
+                    apexIdx = i;
+                }
+                // If they accelerate by 30 km/h, they are out of Turn 1
+                if (trace[i].speed > minSpd + 30) break;
+            }
+
+            t1ApexDist = trace[apexIdx] ? trace[apexIdx].rawDist : 0;
+        }
 
         const rawTotalDist = trace.length > 0 ? trace[trace.length-1].rawDist : 1;
-        
-        // Normalize to a percentage of their own lap
-        trace.forEach(pt => {
-            pt.pct = pt.rawDist / (rawTotalDist || 1);
-        });
+        trace.forEach(pt => pt.pct = pt.rawDist / rawTotalDist);
 
-        // 2. Prepare GPS strictly for Corner Mapping
-        const sortedLoc = [...(d.loc || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
-        const locTrace = sortedLoc.map(l => ({
-            time: (new Date(l.date).getTime() - t0) / 1000,
-            x: l.x, y: l.y
-        }));
-
-        return { ...d, trace, locTrace, rawTotalDist };
+        return { ...d, trace, locTrace, rawTotalDist, t1ApexDist };
     });
 
-    // 3. Normalize all traces to the Baseline Driver's physical track length
-    // This perfectly stretches/squashes the data so the apexes sync and drift is eliminated!
-    const referenceDist = processed[0].rawTotalDist || 5000;
+    // --- PIECEWISE DUAL-ANCHOR ENGINE ---
+    let baseTotalDist = processed[0].rawTotalDist;
+    let baseT1Dist = processed[0].t1ApexDist || 0;
 
     processed.forEach(p => {
+        const isShortLap = p.lap.lap_number === 1 || p.lap.is_pit_out_lap;
+
         p.trace.forEach(pt => {
-            pt.normDist = pt.pct * referenceDist;
+            if (isShortLap && p.t1ApexDist > 0 && p.rawTotalDist > p.t1ApexDist) {
+                // LAP 1: Stretches Launch to T1, then perfectly stretches T1 to the Finish Line
+                if (pt.rawDist <= p.t1ApexDist) {
+                    const segmentPct = pt.rawDist / p.t1ApexDist;
+                    pt.normDist = segmentPct * baseT1Dist;
+                } else {
+                    const segmentPct = (pt.rawDist - p.t1ApexDist) / (p.rawTotalDist - p.t1ApexDist);
+                    pt.normDist = baseT1Dist + (segmentPct * (baseTotalDist - baseT1Dist));
+                }
+            } else {
+                // FLYING LAPS: Standard Start-to-Finish Percentage Stretch
+                pt.normDist = pt.pct * baseTotalDist;
+            }
         });
     });
 
-    // 4. Uniform Resampling
-    // Trim the final 0.5% of the lap so the interpolation math never runs out of bounds and spikes!
-    const capDist = referenceDist * 0.995; 
-    const step = capDist / numPoints;
+    // --- UNIFORM RESAMPLING ---
+    const chartRange = baseTotalDist * 0.995;
+    const step = chartRange / numPoints;
+    
     const baseTrace = processed[0].trace;
     const baseLoc = processed[0].locTrace;
 
     const getAtDist = (arr, targetDist) => {
-        if(arr.length === 0) return {time:0, speed:0};
+        if(arr.length === 0) return {time: null, speed: null};
+        if(targetDist <= arr[0].normDist) return arr[0]; 
+        if(targetDist >= arr[arr.length-1].normDist) return arr[arr.length-1];
+
         let idx = arr.findIndex(item => item.normDist >= targetDist);
         if(idx <= 0) return arr[0];
-        if(idx === -1) return arr[arr.length-1];
+        
         let p1 = arr[idx-1], p2 = arr[idx];
         let fraction = (targetDist - p1.normDist) / (p2.normDist - p1.normDist) || 0;
         return {
@@ -868,10 +947,13 @@ window.processTelemetryMath = function(dataArray, numPoints = 300) {
     };
 
     const getLocAtTime = (arr, t) => {
-        if (arr.length === 0) return {x:0, y:0};
+        if (arr.length === 0 || t === null) return {x:0, y:0};
+        if(t <= arr[0].time) return arr[0];
+        if(t >= arr[arr.length-1].time) return arr[arr.length-1];
+
         let idx = arr.findIndex(item => item.time >= t);
         if(idx <= 0) return arr[0];
-        if(idx === -1) return arr[arr.length-1];
+        
         let p1 = arr[idx-1], p2 = arr[idx];
         let fraction = (t - p1.time) / (p2.time - p1.time) || 0;
         return {
@@ -886,20 +968,24 @@ window.processTelemetryMath = function(dataArray, numPoints = 300) {
     const uniformData = processed.map(p => ({ dNum: p.dNum, lap: p.lap, speedData: [], deltaData: [] }));
 
     for (let i = 0; i <= numPoints; i++) {
-        const targetDist = i * step;
-        chartLabels.push((targetDist / 1000).toFixed(2) + 'km'); // Properly scaled in km!
+        const targetDist = i * step; // Everyone cleanly anchors at exactly 0.00km!
+        chartLabels.push((targetDist / 1000).toFixed(2) + 'km');
 
         const basePt = getAtDist(baseTrace, targetDist);
-        
-        // Only grab GPS from the baseline to define the corners
         const locPt = getLocAtTime(baseLoc, basePt.time);
+        
         trackX.push(locPt.x);
         trackY.push(locPt.y);
 
         uniformData.forEach((ud, idx) => {
             const pt = getAtDist(processed[idx].trace, targetDist);
             ud.speedData.push(pt.speed);
-            ud.deltaData.push(pt.time - basePt.time);
+            
+            if (pt.time !== null && basePt.time !== null) {
+                ud.deltaData.push(pt.time - basePt.time);
+            } else {
+                ud.deltaData.push(null);
+            }
         });
     }
 
@@ -4963,8 +5049,8 @@ function switchTeamSubTab(tabId) {
 
 async function startApp() {
     try {
-        // Attempt to load the local database file for the current year
-        const dbResponse = await fetch(`f1_db_${currentYear}.json`);
+        // THE FIX: Point to the new data folder
+        const dbResponse = await fetch(`data/f1_db_${currentYear}.json`);
         if (dbResponse.ok) {
             LOCAL_DB = await dbResponse.json();
             console.log(`Loaded local database for ${currentYear}`);
@@ -4977,20 +5063,19 @@ async function startApp() {
         LOCAL_DB = {};
     }
     
-    // Start the app normally
     loadSeason();
 }
 
-// Overwrite your changeYear function slightly so it swaps databases when you change years
 const originalChangeYear = changeYear;
 changeYear = async function(year) {
     currentYear = parseInt(year);
     try {
-        const dbResponse = await fetch(`f1_db_${currentYear}.json`);
+        // THE FIX: Point to the new data folder
+        const dbResponse = await fetch(`data/f1_db_${currentYear}.json`);
         LOCAL_DB = dbResponse.ok ? await dbResponse.json() : {};
     } catch (e) { LOCAL_DB = {}; }
     
-    originalChangeYear(year); // Call your existing UI update logic
+    originalChangeYear(year); 
 }
 
 // --- NEW: LAP COMPARISONS WIDGET ---
@@ -5142,9 +5227,56 @@ async function renderLapComparisons(containerId) {
             chartArea.innerHTML = `<div class="loading" style="padding: 3rem;"><div class="spinner"></div>Fetching Telemetry for Lap ${lapNum}...</div>`;
 
             try {
+                // THE FIX 1: Calculate which chunk file holds this round's data!
+                const roundNum = currentMeeting.race_week || 1;
+                const chunkIdx = Math.floor((roundNum - 1) / 5);
+                const startRound = chunkIdx * 5 + 1;
+                const endRound = startRound + 4;
+                const telemetryFilename = `data/f1_telemetry_${currentYear}_${startRound}_${endRound}.json`;
+
+                // THE FIX 2: Check for local Fast-F1 data, caching it so we don't re-download the 20MB file on every click!
+                let fastF1Data = null;
+                try {
+                    if (!window.fastF1Cache) window.fastF1Cache = {};
+                    if (!window.fastF1Cache[telemetryFilename]) {
+                        const res = await fetch(telemetryFilename);
+                        if (res.ok) window.fastF1Cache[telemetryFilename] = await res.json();
+                        else window.fastF1Cache[telemetryFilename] = {}; // Cache the failure to avoid spamming 404s
+                    }
+                    fastF1Data = window.fastF1Cache[telemetryFilename];
+                } catch (e) {
+                    fastF1Data = {};
+                }
+
                 const getTelemetry = async (dNum) => {
                     const lap = allLaps.find(l => l.driver_number === dNum && l.lap_number === lapNum);
                     if (!lap || !lap.lap_duration) return null;
+
+                    const fastKey = `R-${roundNum}-${dNum}-L${lapNum}`;
+                    
+                    // HYBRID ENGINE A: If perfect Fast-F1 data exists locally, use it!
+                    if (fastF1Data && fastF1Data[fastKey] && fastF1Data[fastKey].time.length > 10) {
+                        const fd = fastF1Data[fastKey];
+                        const trace = [];
+                        
+                        const startTime = fd.time[0];
+                        const startDist = fd.distance[0];
+                        const maxDist = (fd.distance[fd.distance.length - 1] - startDist) || 1;
+                        
+                        for (let i = 0; i < fd.time.length; i++) {
+                            const relativeDist = fd.distance[i] - startDist;
+                            trace.push({
+                                time: fd.time[i] - startTime,
+                                speed: fd.speed[i],
+                                rawDist: relativeDist, // Pure absolute distance!
+                                x: fd.x[i],
+                                y: fd.y[i]
+                            });
+                        }
+                        return { lap, trace, dNum, rawTotalDist: maxDist, isFastF1: true };
+                    }
+
+                    // HYBRID ENGINE B: Fallback to the live OpenF1 API (for Sprints, Quali, or new races)
                     const startStr = encodeURIComponent(new Date(lap.date_start).toISOString());
                     const endStr = encodeURIComponent(new Date(new Date(lap.date_start).getTime() + lap.lap_duration * 1000).toISOString());
 
@@ -5152,14 +5284,16 @@ async function renderLapComparisons(containerId) {
                         fetchJSON(`${BASE}/car_data?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[]),
                         fetchJSON(`${BASE}/location?session_key=${currentSession.session_key}&driver_number=${dNum}&date>=${startStr}&date<=${endStr}`).catch(()=>[])
                     ]);
-                    return { lap, car, loc, dNum };
+                    return { lap, car, loc, dNum, isFastF1: false };
                 };
 
-                // THE FIX: Fetch sequentially to prevent the API from rate-limiting and dropping the 3rd driver!
                 const validData = [];
                 for (const dNum of sel) {
                     const data = await getTelemetry(dNum);
-                    if (data && data.car && data.car.length > 10) validData.push(data);
+                    // Support both Fast-F1 traces AND OpenF1 car arrays
+                    if (data && ((data.car && data.car.length > 10) || (data.trace && data.trace.length > 10))) {
+                        validData.push(data);
+                    }
                 }
 
                 if (validData.length === 0) {
@@ -5167,11 +5301,16 @@ async function renderLapComparisons(containerId) {
                     return;
                 }
 
-                const telemetryInput = validData.map(d => ({ lap: d.lap, car: d.car, loc: d.loc, dNum: d.dNum }));
+                // Pass the hybrid data into our math processor
+                const telemetryInput = validData.map(d => ({ 
+                    lap: d.lap, car: d.car, loc: d.loc, dNum: d.dNum, 
+                    trace: d.trace, rawTotalDist: d.rawTotalDist, isFastF1: d.isFastF1 
+                }));
+                
                 telemetryInput.sort((a,b) => a.lap.lap_duration - b.lap.lap_duration);
 
                 const { chartLabels, uniformData, corners } = window.processTelemetryMath(telemetryInput);
-
+// ... (Leave the rest of the drawLapCompCharts function exactly as it is) ...
                 const bestLapDuration = uniformData[0].lap.lap_duration;
                 let lapTimesHtml = `<div style="display:flex; justify-content:center; gap: 2.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">`;
                 
