@@ -99,6 +99,25 @@ window.switchSeasonTab = function(tabId) {
     }
 };
 
+window.switchSeasonChampSubTab = function(tabId) {
+    document.querySelectorAll('#season-champ-subtabs .subtab-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById(`season-champ-btn-${tabId}`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    document.querySelectorAll('#season-championship-battle-area .subtab-content').forEach(content => content.classList.remove('active'));
+    const activeContent = document.getElementById(`season-champ-content-${tabId}`);
+    if (activeContent) activeContent.classList.add('active');
+
+    // --- THE FIX: Force Chart.js to recalculate dimensions now that the container is visible! ---
+    if (tabId === 'driver') {
+        if (window.champDriverChartInst) window.champDriverChartInst.resize();
+        if (window.champDriverAreaChartInst) window.champDriverAreaChartInst.resize();
+    } else if (tabId === 'team') {
+        if (window.champTeamChartInst) window.champTeamChartInst.resize();
+        if (window.champTeamAreaChartInst) window.champTeamAreaChartInst.resize();
+    }
+};
+
 window.switchSeasonSummaryTab = function(tabId) {
     document.querySelectorAll('#season-summary-subtabs .subtab-btn').forEach(btn => btn.classList.remove('active'));
     const activeBtn = document.getElementById(`season-summary-tab-btn-${tabId}`);
@@ -123,6 +142,14 @@ window.switchSeasonSummaryTab = function(tabId) {
         }
 
         window.renderEngineSuppliers();
+    } else if (tabId === 'championship') {
+        // --- THE FIX: Resize the charts when the parent tab actually becomes visible! ---
+        const activeChampBtn = document.querySelector('#season-champ-subtabs .subtab-btn.active');
+        // Check if we are currently looking at the driver or team sub-tab
+        const champTabId = activeChampBtn ? activeChampBtn.id.replace('season-champ-btn-', '') : 'driver';
+        
+        // Re-trigger the sub-tab logic, which contains our .resize() commands!
+        window.switchSeasonChampSubTab(champTabId);
     }
 };
 
@@ -140,6 +167,10 @@ window.switchDriverSubTab = function(tabId) {
     }
     if (tabId === 'lap-times' && currentDriverView && currentSession) {
         window.renderPaceAnalysisTab('driver-subtab-content-lap-times'); 
+    }
+    // --- THE FIX: Route the new tab to the generic Dominance function! ---
+    if (tabId === 'lap-comparisons' && currentDriverView && currentSession) {
+        window.renderTrackDominance('ddom', currentDriverView);
     }
 };
 
@@ -204,8 +235,82 @@ window.switchQualiTab = function(btn, phaseId) {
 window.updateDriverSubTabsForSession = function() {
     const sn = (currentSession?.session_name || '').toLowerCase();
     const isRace = (sn.includes('race') || sn.includes('sprint')) && !sn.includes('qualifying') && !sn.includes('shoot');
-    const placesBtn = document.getElementById('driver-subtab-btn-places');
-    if (placesBtn) placesBtn.style.display = isRace ? '' : 'none';
+    const isQuali = sn.includes('qualifying') || sn.includes('shoot');
+
+    // 1. Build the Tab Buttons
+    const container = document.getElementById('driver-subtabs-container');
+    if (container) {
+        let html = `<button class="subtab-btn active" id="driver-subtab-btn-tire-strategy" onclick="switchDriverSubTab('tire-strategy')">Lap Times</button>`;
+        if (isRace) {
+            html += `<button class="subtab-btn" id="driver-subtab-btn-places" onclick="switchDriverSubTab('places')">Positions Gained/Lost</button>`;
+        }
+        if (isQuali) {
+            html += `<button class="subtab-btn" id="driver-subtab-btn-lap-comparisons" onclick="switchDriverSubTab('lap-comparisons')">Lap Comparison</button>`;
+        }
+        container.innerHTML = html;
+    }
+
+    // 2. ALWAYS inject/rebuild the HTML layout to ensure the correct Driver Number is permanently baked into the onchange event
+    const wrapper = document.getElementById('driver-subtabs-wrapper');
+    if (wrapper) {
+        let compTab = document.getElementById('driver-subtab-content-lap-comparisons');
+        
+        // If it doesn't exist, create the wrapper div
+        if (!compTab) {
+            compTab = document.createElement('div');
+            compTab.id = 'driver-subtab-content-lap-comparisons';
+            compTab.className = 'subtab-content';
+            wrapper.appendChild(compTab);
+        }
+
+        // Rebuild the inner HTML every time so it always has the correct currentDriverView
+        // Rebuild the inner HTML every time so it always has the correct currentDriverView
+        compTab.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1rem;">
+          <div class="standings-title" style="margin-bottom: 0.5rem; font-size: 0.8rem;">Compare Lap With</div>
+          
+          <div style="display: flex; gap: 1.5rem; align-items: center;">
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <span id="ddom-name-a" style="font-family:'Barlow Condensed'; font-size:1.3rem; font-weight:700; color:var(--text);"></span>
+              <span id="ddom-time-a" style="font-family:'Barlow Condensed'; font-size:1.3rem; color:var(--text);"></span>
+            </div>
+            <span style="font-family:'Barlow Condensed'; font-size:1.2rem; font-weight:700; color:var(--text-dim);">VS</span>
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <span id="ddom-time-b" style="font-family:'Barlow Condensed'; font-size:1.3rem; color:var(--text);"></span>
+              <select id="ddom-driver-b" class="theme-toggle" style="appearance: auto; padding: 0.5rem;" onchange="window.renderTrackDominance('ddom', ${currentDriverView})"></select>
+            </div>
+          </div>
+        </div>
+        
+        <div id="ddom-loading" class="loading" style="display:none;"><div class="spinner"></div>Analyzing Telemetry...</div>
+        
+        <div id="ddom-results" style="display:none;">
+          <div id="ddom-trace-container" style="width: 100%; margin-bottom: 2.5rem;">
+            <div class="standings-title" style="margin-bottom: 0.5rem; text-align: left;">Telemetry Trace</div>
+            <div id="ddom-trace-body" style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1rem;"></div>
+          </div>
+          
+          <div style="max-width: 1000px; margin: 0 auto;">
+            <div class="standings-title" style="margin-bottom: 0.5rem; text-align: left;">Sector Comparison</div>
+            <div style="display: flex; gap: 1.5rem; align-items: flex-start; justify-content: center; flex-wrap: wrap;">
+              
+              <div style="flex: 1; min-width: 400px; max-width: 600px; background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; text-align:center; position: relative;">
+                <button id="ddom-toggle-times-btn" class="theme-toggle" onclick="window.toggleMiniSectors('ddom')" style="position: absolute; top: 1.25rem; right: 1.25rem; padding: 0.3rem 0.8rem; z-index: 10;">Show Sector Times</button>
+                <div id="ddom-analysis" class="stats-bar" style="margin-bottom:1.5rem; justify-content:flex-start; gap: 3rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border); text-align: left;"></div>
+                <canvas id="ddom-trackMapCanvas" width="800" height="400" style="max-width:100%; height:auto; margin: 0 auto; display: block;"></canvas>
+                <div id="ddom-map-legend" style="display:flex; justify-content:center; gap:1.5rem; margin-top:1.5rem; font-family:'Barlow Condensed'; font-size:0.9rem; font-weight:700;"></div>
+              </div>
+
+              <div id="ddom-mini-sectors-wrapper" style="display:none; width: 320px; flex-shrink: 0;">
+                <div id="ddom-mini-sectors" style="background:var(--surface); border:1px solid var(--border); border-radius:4px; overflow-y:auto; max-height: 535px;"></div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+        `;
+    }
 };
 
 // --- INITIALIZATION ---
@@ -512,347 +617,6 @@ window.loadStandings = async function() {
     }
 };
 
-window.renderChampionshipBattle = async function(allYearSessions, sortedDrivers, sortedTeams, driverInfoMap) {
-    const champArea = document.getElementById('season-championship-battle-area');
-    if (!champArea) return;
-
-    const raceSessions = allYearSessions.filter(s => s.session_name.toLowerCase() === 'race');
-    const pastRaces = raceSessions.filter(s => new Date(s.date_start) < NOW).sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
-
-    if (pastRaces.length === 0) {
-        champArea.innerHTML = `<div style="padding:2rem 1rem; text-align:center; color:var(--text-dim);">Not enough data for championship battle yet.</div>`;
-        return;
-    }
-
-    champArea.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing Championship Battle...</div>`;
-
-    try {
-        const dTimelines = await Promise.all(pastRaces.map(r => API.fetchJSON(`${Constants.BASE}/championship_drivers?session_key=${r.session_key}`).catch(()=>[])));
-
-        const labels = [];
-        const driverGaps = {};
-        const teamGaps = {};
-
-        const teamDriverMap = {};
-        sortedTeams.forEach(t => teamDriverMap[t.team_name] = []);
-        sortedDrivers.forEach(d => {
-            const info = driverInfoMap[d.driver_number] || {};
-            const tName = info.team_name;
-            if (tName) {
-                const matched = sortedTeams.find(st => st.team_name === tName || st.team_name.includes(tName) || tName.includes(st.team_name));
-                if (matched) teamDriverMap[matched.team_name].push(d.driver_number);
-            }
-        });
-
-        sortedDrivers.forEach(d => driverGaps[d.driver_number] = []);
-        sortedTeams.forEach(t => teamGaps[t.team_name] = []);
-
-        pastRaces.forEach((r, i) => {
-            const meeting = allMeetings.find(m => m.meeting_key === r.meeting_key);
-            labels.push(meeting ? meeting.circuit_short_name : `R${i+1}`);
-
-            const dData = dTimelines[i];
-            if (dData && dData.length > 0) {
-                const maxDriverPts = Math.max(...dData.map(d => d.points_current || 0));
-                sortedDrivers.forEach(driver => {
-                    const d = dData.find(x => x.driver_number === driver.driver_number);
-                    driverGaps[driver.driver_number].push(d ? maxDriverPts - (d.points_current || 0) : maxDriverPts);
-                });
-
-                const roundTeamPts = {};
-                sortedTeams.forEach(team => {
-                    let tPts = 0;
-                    const driversForTeam = teamDriverMap[team.team_name] || [];
-                    driversForTeam.forEach(dn => {
-                        const dObj = dData.find(x => x.driver_number === dn);
-                        if (dObj) tPts += (dObj.points_current || 0);
-                    });
-                    roundTeamPts[team.team_name] = tPts;
-                });
-
-                const maxTeamPts = Math.max(...Object.values(roundTeamPts), 0);
-                sortedTeams.forEach(team => {
-                    const pts = roundTeamPts[team.team_name] || 0;
-                    teamGaps[team.team_name].push(maxTeamPts - pts);
-                });
-
-            } else {
-                sortedDrivers.forEach(driver => driverGaps[driver.driver_number].push(null));
-                sortedTeams.forEach(team => teamGaps[team.team_name].push(null));
-            }
-        });
-
-        const futureMeetings = allMeetings.filter(m => !m.is_testing && new Date(m.date_end) >= NOW);
-        const getMeetingMax = (m) => {
-            const hasSprint = allYearSessions.some(s => s.meeting_key === m.meeting_key && s.session_name.toLowerCase().includes('sprint') && !s.session_name.toLowerCase().includes('qualifying') && !s.session_name.toLowerCase().includes('shoot'));
-            return { d: hasSprint ? 34 : 26, t: hasSprint ? 59 : 44 }; 
-        };
-
-        const driverLeader = sortedDrivers[0];
-        const driver2nd = sortedDrivers.length > 1 ? sortedDrivers[1] : null;
-        let dGap = driverLeader && driver2nd ? driverLeader.points_current - driver2nd.points_current : 0;
-        let dClinchRound = "Not Possible Yet";
-
-        if (driverLeader && driver2nd) {
-            const dRemaining = futureMeetings.map(m => getMeetingMax(m).d);
-            let currentSimGap = dGap;
-            for (let i = 0; i < dRemaining.length; i++) {
-                currentSimGap += dRemaining[i]; 
-                const left = dRemaining.slice(i+1).reduce((a,b)=>a+b, 0); 
-                if (currentSimGap > left) {
-                    dClinchRound = `Race ${futureMeetings[i].race_week} (${allMeetings.find(m => m.meeting_key === futureMeetings[i].meeting_key)?.circuit_short_name})`;
-                    break;
-                }
-            }
-        }
-
-        const teamLeader = sortedTeams[0];
-        const team2nd = sortedTeams.length > 1 ? sortedTeams[1] : null;
-        let tGap = teamLeader && team2nd ? teamLeader.points_current - team2nd.points_current : 0;
-        let tClinchRound = "Not Possible Yet";
-
-        if (teamLeader && team2nd) {
-            const tRemaining = futureMeetings.map(m => getMeetingMax(m).t);
-            let currentSimGap = tGap;
-            for (let i = 0; i < tRemaining.length; i++) {
-                currentSimGap += tRemaining[i];
-                const left = tRemaining.slice(i+1).reduce((a,b)=>a+b, 0);
-                if (currentSimGap > left) {
-                    tClinchRound = `Race ${futureMeetings[i].race_week} (${allMeetings.find(m => m.meeting_key === futureMeetings[i].meeting_key)?.circuit_short_name})`;
-                    break;
-                }
-            }
-        }
-
-        const teamDriverCounts = {};
-        let dLegendHtml = `<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.75rem; margin-top:1.5rem;">`;
-        
-        sortedDrivers.forEach(d => {
-            const info = driverInfoMap[d.driver_number] || {};
-            const tName = info.team_name || 'Unknown';
-            
-            if (!teamDriverCounts[tName]) teamDriverCounts[tName] = 0;
-            teamDriverCounts[tName]++;
-            const isSecondDriver = teamDriverCounts[tName] > 1;
-            
-            const tc = Utils.teamColor(tName);
-            const acronym = info.name_acronym || info.last_name || `#${d.driver_number}`;
-            
-            const tileBg = isSecondDriver ? 'transparent' : tc.bg;
-            const tileBorder = isSecondDriver ? `2px dashed ${tc.bg}` : `2px solid ${tc.bg}`;
-            const tileText = isSecondDriver ? 'var(--text)' : tc.text;
-            const logoColor = isSecondDriver ? null : tc.text; 
-            
-            dLegendHtml += `
-                <div class="driver-num-badge" 
-                     onclick="openDriverProfile(${d.driver_number}); setTimeout(() => switchProfileSubTab('championship'), 50);"
-                     onmouseenter="highlightChampLine('driver', ${d.driver_number})"
-                     onmouseleave="resetChampLines('driver')"
-                     style="background:${tileBg}; border:${tileBorder}; color:${tileText}; width:68px; flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; box-sizing: border-box; transition: transform 0.15s;" 
-                     onmouseover="this.style.transform='translateY(-2px)';" 
-                     onmouseout="this.style.transform='translateY(0)';"
-                     title="${info.full_name || acronym}">
-                    ${Utils.getTeamLogoHtml(tName, '10px', logoColor)}
-                    <span style="font-size:0.85rem; letter-spacing:0.05em; font-weight:700;">${acronym}</span>
-                </div>
-            `;
-        });
-        dLegendHtml += `</div>`;
-
-        let tLegendHtml = `<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.75rem; margin-top:1.5rem;">`;
-        sortedTeams.forEach(t => {
-            const tc = Utils.teamColor(t.team_name);
-            const safeTeamName = t.team_name.replace(/'/g, "\\'"); 
-            
-            tLegendHtml += `
-                <div class="driver-num-badge" 
-                     onclick="openTeamProfile('${safeTeamName}'); setTimeout(() => switchTeamSubTab('championship'), 50);"
-                     onmouseenter="highlightChampLine('team', '${safeTeamName}')"
-                     onmouseleave="resetChampLines('team')"
-                     style="background:${tc.bg}; border:2px solid ${tc.bg}; width:48px; height:26px; display:flex; align-items:center; justify-content:center; cursor:pointer; box-sizing: border-box; transition: transform 0.15s;" 
-                     onmouseover="this.style.transform='translateY(-2px)';" 
-                     onmouseout="this.style.transform='translateY(0)';"
-                     title="${t.team_name}">
-                    ${Utils.getTeamLogoHtml(t.team_name, '14px', tc.text)}
-                </div>
-            `;
-        });
-        tLegendHtml += `</div>`;
-
-        champArea.style.padding = '0';
-        champArea.style.textAlign = 'left';
-
-        champArea.innerHTML = `
-            <div class="standings-title" style="margin-top: 1rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; padding: 0 0.5rem;">
-                <span>Gap to Championship Leader (Driver)</span>
-                <span style="color:var(--text-muted); text-transform:none;">Earliest Theoretical Clinch: <span style="color:var(--text); font-weight:900; text-transform:uppercase;">${dClinchRound}</span></span>
-            </div>
-            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:2.5rem; width: 100%;">
-                <div style="height: 400px; width: 100%; position: relative;"><canvas id="champ-driver-chart"></canvas></div>
-                ${dLegendHtml}
-            </div>
-
-            <div class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; padding: 0 0.5rem;">
-                <span>Gap to Championship Leader (Constructor)</span>
-                <span style="color:var(--text-muted); text-transform:none;">Earliest Theoretical Clinch: <span style="color:var(--text); font-weight:900; text-transform:uppercase;">${tClinchRound}</span></span>
-            </div>
-            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:1rem; width: 100%;">
-                <div style="height: 400px; width: 100%; position: relative;"><canvas id="champ-team-chart"></canvas></div>
-                ${tLegendHtml}
-            </div>
-        `;
-
-        const isLight = document.body.dataset.theme === 'light';
-        const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
-        const tickColor = isLight ? '#666' : '#aaa';
-
-        const renderTeamCounts = {};
-
-        const dDatasets = sortedDrivers.map((d, i) => {
-            const info = driverInfoMap[d.driver_number] || {};
-            const tName = info.team_name || 'Unknown';
-            
-            if (!renderTeamCounts[tName]) renderTeamCounts[tName] = 0;
-            renderTeamCounts[tName]++;
-            const isSecondDriver = renderTeamCounts[tName] > 1;
-
-            const tc = Utils.teamColor(tName);
-            const isLeader = i === 0;
-            return {
-                label: info.name_acronym || info.last_name || `#${d.driver_number}`,
-                data: driverGaps[d.driver_number],
-                borderColor: tc.bg,
-                backgroundColor: tc.bg,
-                borderWidth: isLeader ? 4 : 2,
-                borderDash: isSecondDriver ? [5, 5] : [], 
-                pointRadius: 4,
-                pointBackgroundColor: tc.bg,
-                fill: false,
-                tension: 0.2,
-                spanGaps: true,
-                order: isLeader ? 0 : 1,
-                _driverNum: d.driver_number,
-                _origColor: tc.bg,
-                _origWidth: isLeader ? 4 : 2,
-                _origOrder: isLeader ? 0 : 1,
-                _origDash: isSecondDriver ? [5, 5] : []
-            };
-        });
-
-        const tDatasets = sortedTeams.map((t, i) => {
-            const tc = Utils.teamColor(t.team_name);
-            const isLeader = i === 0;
-            return {
-                label: t.team_name,
-                data: teamGaps[t.team_name],
-                borderColor: tc.bg,
-                backgroundColor: tc.bg,
-                borderWidth: isLeader ? 4 : 2,
-                pointRadius: 4,
-                pointBackgroundColor: tc.bg,
-                fill: false,
-                tension: 0.2,
-                spanGaps: true,
-                order: isLeader ? 0 : 1,
-                _teamName: t.team_name,
-                _origColor: tc.bg,
-                _origWidth: isLeader ? 4 : 2,
-                _origOrder: isLeader ? 0 : 1
-            };
-        });
-
-        const baseChartOptions = {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'nearest', axis: 'xy', intersect: false },
-            plugins: {
-                legend: { display: false }, 
-                tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
-            },
-            scales: {
-                x: { ticks: { color: tickColor, font: { family: 'Barlow Condensed', weight: 600 } }, grid: { color: gridColor } },
-                y: { 
-                    reverse: true, 
-                    beginAtZero: true,
-                    title: { display: true, text: 'Points Behind Leader', color: tickColor, font: { family: 'Barlow Condensed' } }, 
-                    grid: { color: gridColor }, 
-                    ticks: { color: tickColor, font: { family: 'Barlow Condensed' } } 
-                }
-            }
-        };
-
-        window.highlightChampLine = (type, id) => {
-            const chart = type === 'driver' ? window.champDriverChartInst : window.champTeamChartInst;
-            if (!chart) return;
-            
-            chart.data.datasets.forEach(ds => {
-                const isTarget = type === 'driver' ? ds._driverNum === id : ds._teamName === id;
-                if (isTarget) {
-                    ds.borderColor = Utils.convertHexToRGBA(ds._origColor, 1.0);
-                    ds.borderWidth = 5;
-                    ds.order = 0; 
-                } else {
-                    ds.borderColor = Utils.convertHexToRGBA(ds._origColor, isLight ? 0.1 : 0.05);
-                    ds.borderWidth = 1.5;
-                    ds.order = 1;
-                }
-            });
-            chart.update('none'); 
-        };
-
-        window.resetChampLines = (type) => {
-            const chart = type === 'driver' ? window.champDriverChartInst : window.champTeamChartInst;
-            if (!chart) return;
-            
-            chart.data.datasets.forEach(ds => {
-                ds.borderColor = ds._origColor;
-                ds.borderWidth = ds._origWidth;
-                ds.order = ds._origOrder;
-                ds.borderDash = ds._origDash || [];
-            });
-            chart.update('none');
-        };
-
-        setTimeout(() => {
-            const dCanvas = document.getElementById('champ-driver-chart');
-            const tCanvas = document.getElementById('champ-team-chart');
-            if (dCanvas) dCanvas.onmouseleave = () => window.resetChampLines('driver');
-            if (tCanvas) tCanvas.onmouseleave = () => window.resetChampLines('team');
-        }, 100);
-
-        const driverChartOptions = {
-            ...baseChartOptions,
-            onHover: (e, elements, chart) => {
-                if (elements && elements.length) {
-                    window.highlightChampLine('driver', chart.data.datasets[elements[0].datasetIndex]._driverNum);
-                }
-            }
-        };
-
-        const teamChartOptions = {
-            ...baseChartOptions,
-            onHover: (e, elements, chart) => {
-                if (elements && elements.length) {
-                    window.highlightChampLine('team', chart.data.datasets[elements[0].datasetIndex]._teamName);
-                }
-            }
-        };
-
-        if (window.champDriverChartInst) window.champDriverChartInst.destroy();
-        window.champDriverChartInst = new Chart(document.getElementById('champ-driver-chart').getContext('2d'), {
-            type: 'line', data: { labels, datasets: dDatasets }, options: driverChartOptions
-        });
-
-        if (window.champTeamChartInst) window.champTeamChartInst.destroy();
-        window.champTeamChartInst = new Chart(document.getElementById('champ-team-chart').getContext('2d'), {
-            type: 'line', data: { labels, datasets: tDatasets }, options: teamChartOptions
-        });
-
-    } catch (e) {
-        console.error(e);
-        champArea.innerHTML = `<div class="error-msg">Could not load championship timeline: ${e.message}</div>`;
-    }
-};
 
 function getEngineForTeam(apiTeamName) {
     if (!apiTeamName) return null;
@@ -2003,12 +1767,11 @@ window.renderGapToLeader = async function(containerId) {
         const borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
 
         const renderTeamCounts = {};
+        const driverHierarchy = Utils.getDriverHierarchy(activeDrivers);
+        
         const gapDatasets = activeDrivers.map((d, i) => {
             const tName = d.team_name || 'Unknown';
-            if (!renderTeamCounts[tName]) renderTeamCounts[tName] = 0;
-            renderTeamCounts[tName]++;
-
-            const isSecondDriver = renderTeamCounts[tName] > 1;
+            const isSecondDriver = driverHierarchy[d.driver_number] > 0;
             const tc = Utils.teamColor(tName);
             const isLeader = i === 0;
 
@@ -2034,13 +1797,10 @@ window.renderGapToLeader = async function(containerId) {
         });
 
         let gapLegendHtml = `<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.75rem; margin-top:1.5rem; margin-bottom: 2rem;">`;
-        const legTeamCounts = {};
+        
         activeDrivers.forEach(d => {
             const tName = d.team_name || 'Unknown';
-            if (!legTeamCounts[tName]) legTeamCounts[tName] = 0;
-            legTeamCounts[tName]++;
-
-            const isSecondDriver = legTeamCounts[tName] > 1;
+            const isSecondDriver = driverHierarchy[d.driver_number] > 0;
             const tc = Utils.teamColor(tName);
             const acronym = d.name_acronym || d.last_name || `#${d.driver_number}`;
             
@@ -2474,14 +2234,12 @@ window.renderLapComparisons = async function(containerId) {
             return;
         }
 
-        const teamDriverCounts = {};
+        const driverHierarchy = Utils.getDriverHierarchy(activeDrivers);
+        
         activeDrivers.forEach(d => {
-            const tName = d.team_name || 'Unknown';
-            if (!teamDriverCounts[tName]) teamDriverCounts[tName] = 0;
-            teamDriverCounts[tName]++;
-            
-            if (teamDriverCounts[tName] === 1) d.lineStyle = 'solid';
-            else if (teamDriverCounts[tName] === 2) d.lineStyle = 'dashed';
+            const rank = driverHierarchy[d.driver_number] || 0;
+            if (rank === 0) d.lineStyle = 'solid';
+            else if (rank === 1) d.lineStyle = 'dashed';
             else d.lineStyle = 'dotted';
             
             d.lineDashArray = d.lineStyle === 'solid' ? [] : (d.lineStyle === 'dashed' ? [6, 4] : [2, 2]);
@@ -2841,17 +2599,16 @@ window.renderLapComparisons = async function(containerId) {
     }
 };
 
-window.renderTrackDominance = async function() {
-    const container = document.getElementById('subtab-content-track-dominance');
+window.renderTrackDominance = async function(prefix = 'dom', fixedDriverA = null) {
+    const container = document.getElementById(prefix === 'dom' ? 'subtab-content-track-dominance' : `driver-subtab-content-lap-comparisons`);
     if (!container || !container.classList.contains('active')) return;
 
-    document.getElementById('dom-loading').style.display = 'flex';
-    document.getElementById('dom-results').style.opacity = '0.4';
-    document.getElementById('dom-results').style.pointerEvents = 'none';
+    document.getElementById(`${prefix}-loading`).style.display = 'flex';
+    document.getElementById(`${prefix}-results`).style.opacity = '0.4';
+    document.getElementById(`${prefix}-results`).style.pointerEvents = 'none';
 
     try {
-        const selectA = document.getElementById('dom-driver-a');
-        const selectB = document.getElementById('dom-driver-b');
+        const selectB = document.getElementById(`${prefix}-driver-b`);
         
         const allLaps = await API.fetchJSON(`${Constants.BASE}/laps?session_key=${currentSession.session_key}`);
         
@@ -2864,23 +2621,31 @@ window.renderTrackDominance = async function() {
             }
         });
 
-        if (window.lastDomSessionKey !== currentSession.session_key) {
-            window.lastDomSessionKey = currentSession.session_key;
+        if (window[`lastDomSessionKey_${prefix}`] !== currentSession.session_key || window[`lastDomFixedDriver_${prefix}`] !== fixedDriverA) {
+            window[`lastDomSessionKey_${prefix}`] = currentSession.session_key;
+            window[`lastDomFixedDriver_${prefix}`] = fixedDriverA;
             
             const availableDrivers = orderedDriversList.filter(d => driverBestLaps[d.driver_number]);
             availableDrivers.sort((a, b) => driverBestLaps[a.driver_number].lap_duration - driverBestLaps[b.driver_number].lap_duration);
             
-            const options = availableDrivers.map(d => `<option value="${d.driver_number}">${d.name_acronym || d.last_name}</option>`).join('');
-            selectA.innerHTML = options;
-            selectB.innerHTML = options;
-            if (availableDrivers.length > 1) selectB.selectedIndex = 1;
+            if (fixedDriverA !== null) {
+                const options = availableDrivers.filter(d => d.driver_number !== fixedDriverA).map(d => `<option value="${d.driver_number}">${d.name_acronym || d.last_name}</option>`).join('');
+                selectB.innerHTML = options;
+                if (selectB.options.length > 0) selectB.selectedIndex = 0;
+            } else {
+                const options = availableDrivers.map(d => `<option value="${d.driver_number}">${d.name_acronym || d.last_name}</option>`).join('');
+                const selectA = document.getElementById(`${prefix}-driver-a`);
+                selectA.innerHTML = options;
+                selectB.innerHTML = options;
+                if (availableDrivers.length > 1) selectB.selectedIndex = 1;
+            }
         }
 
-        const dNumA = Number(selectA.value);
+        const dNumA = fixedDriverA !== null ? fixedDriverA : Number(document.getElementById(`${prefix}-driver-a`).value);
         const dNumB = Number(selectB.value);
 
-        if (dNumA === dNumB) {
-            document.getElementById('dom-loading').style.display = 'none';
+        if (!dNumB || dNumA === dNumB) {
+            document.getElementById(`${prefix}-loading`).style.display = 'none';
             return;
         }
 
@@ -2889,8 +2654,14 @@ window.renderTrackDominance = async function() {
 
         if (!lapA || !lapB) throw new Error("Missing valid lap times for one or both drivers.");
 
-        const timeAEl = document.getElementById('dom-time-a');
-        const timeBEl = document.getElementById('dom-time-b');
+        if (fixedDriverA !== null) {
+            const driverInfoA = orderedDriversList.find(d => d.driver_number === dNumA) || { name_acronym: 'UNK' };
+            const nameEl = document.getElementById(`${prefix}-name-a`);
+            if (nameEl) nameEl.textContent = driverInfoA.name_acronym;
+        }
+
+        const timeAEl = document.getElementById(`${prefix}-time-a`);
+        const timeBEl = document.getElementById(`${prefix}-time-b`);
         
         if (timeAEl && timeBEl) {
             const isAFaster = lapA.lap_duration <= lapB.lap_duration;
@@ -2967,7 +2738,8 @@ window.renderTrackDominance = async function() {
             });
         }
 
-        const canvas = document.getElementById('trackMapCanvas');
+        const canvasId = prefix === 'dom' ? 'trackMapCanvas' : `${prefix}-trackMapCanvas`;
+        const canvas = document.getElementById(canvasId);
         const ctx = canvas.getContext('2d');
         
         const xCoords = refLoc.map(p => p.x);
@@ -3035,13 +2807,13 @@ window.renderTrackDominance = async function() {
             ctx.globalAlpha = 1.0;
         };
 
-        window.highlightDomSector = (sectorId) => {
+        window[`highlightDomSector_${prefix}`] = (sectorId) => {
             if (hoveredSectorId === sectorId) return;
             hoveredSectorId = sectorId;
             drawMap();
             
             miniSectors.forEach(sec => {
-                const row = document.getElementById(`dom-row-${sec.id}`);
+                const row = document.getElementById(`${prefix}-row-${sec.id}`);
                 if (row) {
                     if (sectorId === sec.id) {
                         row.style.background = 'var(--surface2)';
@@ -3076,18 +2848,18 @@ window.renderTrackDominance = async function() {
 
             if (closestDist < 25) { 
                 canvas.style.cursor = 'pointer';
-                window.highlightDomSector(closestId);
+                window[`highlightDomSector_${prefix}`](closestId);
             } else {
                 canvas.style.cursor = 'default';
-                window.highlightDomSector(null);
+                window[`highlightDomSector_${prefix}`](null);
             }
         };
 
-        canvas.onmouseleave = () => window.highlightDomSector(null);
+        canvas.onmouseleave = () => window[`highlightDomSector_${prefix}`](null);
 
         drawMap();
 
-        document.getElementById('dom-map-legend').innerHTML = `
+        document.getElementById(`${prefix}-map-legend`).innerHTML = `
             <div style="display:flex; align-items:center; gap:6px;">
                 <div style="width:12px; height:4px; background:${colorA}; border-radius:2px;"></div> 
                 ${Utils.getTeamLogoHtml(driverInfoA.team_name, '12px')} ${driverInfoA.name_acronym}
@@ -3098,7 +2870,7 @@ window.renderTrackDominance = async function() {
             </div>
         `;
 
-        document.getElementById('dom-analysis').innerHTML = `
+        document.getElementById(`${prefix}-analysis`).innerHTML = `
             <div class="stat"><div class="stat-label">High-Speed Corners/Straights Won</div>
                 <div class="stat-value"><span style="color:${colorA}">${driverInfoA.name_acronym}: ${aHighSpeedWins}</span> vs <span style="color:${colorB}">${driverInfoB.name_acronym}: ${bHighSpeedWins}</span></div>
             </div>
@@ -3108,7 +2880,7 @@ window.renderTrackDominance = async function() {
         `;
 
         let tableHtml = `
-            <div style="display:grid; grid-template-columns: 4rem 1fr 1fr; border-bottom:1px solid var(--border); padding:0.6rem 1rem; background:var(--surface2); font-family:'Barlow Condensed'; font-size:0.8rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">
+            <div style="display:grid; grid-template-columns: 3rem 1fr 1fr; border-bottom:1px solid var(--border); padding:0.25rem 0.5rem; background:var(--surface2); font-family:'Barlow Condensed'; font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; position: sticky; top: 0; z-index: 5;">
                 <div>Sector</div>
                 <div style="text-align:right;">${driverInfoA.name_acronym}</div>
                 <div style="text-align:right;">${driverInfoB.name_acronym}</div>
@@ -3124,17 +2896,17 @@ window.renderTrackDominance = async function() {
             const colorTextB = bWin ? 'var(--text)' : 'var(--text-dim)';
             
             return `
-            <div id="dom-row-${sec.id}" onmouseenter="highlightDomSector(${sec.id})" onmouseleave="highlightDomSector(null)" 
-                 style="display:grid; grid-template-columns: 4rem 1fr 1fr; border-bottom:1px solid var(--border); padding:0.5rem 1rem; align-items:center; font-family:'Barlow Condensed'; font-size:1.1rem; transition: background 0.15s ease; cursor: default;">
-                <div style="color:var(--text-dim); font-size:0.85rem; font-weight:700;">${sec.id}</div>
+            <div id="${prefix}-row-${sec.id}" onmouseenter="window['highlightDomSector_${prefix}'](${sec.id})" onmouseleave="window['highlightDomSector_${prefix}'](null)" 
+                 style="display:grid; grid-template-columns: 3rem 1fr 1fr; border-bottom:1px solid var(--border); padding:0.2rem 0.5rem; align-items:center; font-family:'Barlow Condensed'; font-size:0.9rem; transition: background 0.15s ease; cursor: default;">
+                <div style="color:var(--text-dim); font-size:0.75rem; font-weight:700;">${sec.id}</div>
                 <div style="text-align:right; font-weight:${weightA}; color:${colorTextA};">${sec.timeA.toFixed(3)}</div>
                 <div style="text-align:right; font-weight:${weightB}; color:${colorTextB};">${sec.timeB.toFixed(3)}</div>
             </div>`;
         }).join('');
         
-        document.getElementById('dom-mini-sectors').innerHTML = tableHtml;
+        document.getElementById(`${prefix}-mini-sectors`).innerHTML = tableHtml;
 
-        const traceBody = document.getElementById('dom-trace-body');
+        const traceBody = document.getElementById(`${prefix}-trace-body`);
         
         if (dataA.car.length === 0 || dataB.car.length === 0) {
             traceBody.innerHTML = `<div style="padding:3rem 1rem; text-align:center; color:var(--text-dim);">Detailed speed telemetry is currently unavailable from the API for these laps.</div>`;
@@ -3151,14 +2923,14 @@ window.renderTrackDominance = async function() {
                             ${driverInfoB.name_acronym}
                         </div>
                     </div>
-                    <button id="dom-reset-zoom" class="theme-toggle" style="display:none; padding: 0.3rem 1rem; border-color: var(--accent); color: var(--accent);">Reset Zoom</button>
+                    <button id="${prefix}-reset-zoom" class="theme-toggle" style="display:none; padding: 0.3rem 1rem; border-color: var(--accent); color: var(--accent);">Reset Zoom</button>
                 </div>
                 
-                <div id="dom-chart-wrapper" style="position: relative; width: 100%; cursor: crosshair;">
-                    <div id="dom-brush" style="position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,0.15); border: 1px dashed rgba(255,255,255,0.5); pointer-events: none; display: none; z-index: 50;"></div>
+                <div id="${prefix}-chart-wrapper" style="position: relative; width: 100%; cursor: crosshair;">
+                    <div id="${prefix}-brush" style="position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,0.15); border: 1px dashed rgba(255,255,255,0.5); pointer-events: none; display: none; z-index: 50;"></div>
                     
-                    <div style="height: 250px; width: 100%; position: relative;"><canvas id="dom-speed-chart"></canvas></div>
-                    <div style="height: 150px; width: 100%; position: relative; margin-top: 0.5rem;"><canvas id="dom-delta-chart"></canvas></div>
+                    <div style="height: 250px; width: 100%; position: relative;"><canvas id="${prefix}-speed-chart"></canvas></div>
+                    <div style="height: 150px; width: 100%; position: relative; margin-top: 0.5rem;"><canvas id="${prefix}-delta-chart"></canvas></div>
                 </div>
             `;
             
@@ -3198,7 +2970,7 @@ window.renderTrackDominance = async function() {
                         if (pt) {
                             const xPos = pt.x;
                             if (xPos >= chartArea.left && xPos <= chartArea.right) {
-                                const isSpeedChart = chart.canvas.id === 'dom-speed-chart';
+                                const isSpeedChart = chart.canvas.id === `${prefix}-speed-chart`;
                                 ctx.beginPath();
                                 ctx.moveTo(xPos, chartArea.top); 
                                 ctx.lineTo(xPos, chartArea.bottom);
@@ -3225,9 +2997,9 @@ window.renderTrackDominance = async function() {
                 dsDeltaB.borderDash = [5, 5];
             }
 
-            const ctxSpeed = document.getElementById('dom-speed-chart').getContext('2d');
-            if (window.domSpeedChartInstance) window.domSpeedChartInstance.destroy();
-            window.domSpeedChartInstance = new Chart(ctxSpeed, {
+            const ctxSpeed = document.getElementById(`${prefix}-speed-chart`).getContext('2d');
+            if (window[`${prefix}SpeedChartInstance`]) window[`${prefix}SpeedChartInstance`].destroy();
+            window[`${prefix}SpeedChartInstance`] = new Chart(ctxSpeed, {
                 type: 'line',
                 data: { labels: chartLabels, datasets: [dsSpeedA, dsSpeedB] },
                 plugins: [cornerMarkerPlugin], 
@@ -3243,9 +3015,9 @@ window.renderTrackDominance = async function() {
                 }
             });
 
-            const ctxDelta = document.getElementById('dom-delta-chart').getContext('2d');
-            if (window.domDeltaChartInstance) window.domDeltaChartInstance.destroy();
-            window.domDeltaChartInstance = new Chart(ctxDelta, {
+            const ctxDelta = document.getElementById(`${prefix}-delta-chart`).getContext('2d');
+            if (window[`${prefix}DeltaChartInstance`]) window[`${prefix}DeltaChartInstance`].destroy();
+            window[`${prefix}DeltaChartInstance`] = new Chart(ctxDelta, {
                 type: 'line',
                 data: { labels: chartLabels, datasets: [dsDeltaA, dsDeltaB] },
                 plugins: [cornerMarkerPlugin], 
@@ -3261,27 +3033,27 @@ window.renderTrackDominance = async function() {
             });
 
             Charts.enableChartZoom(
-                'dom-chart-wrapper',
-                'dom-brush',
-                'dom-reset-zoom',
-                [window.domSpeedChartInstance, window.domDeltaChartInstance],
+                `${prefix}-chart-wrapper`,
+                `${prefix}-brush`,
+                `${prefix}-reset-zoom`,
+                [window[`${prefix}SpeedChartInstance`], window[`${prefix}DeltaChartInstance`]],
                 5
             );
         }
 
-        document.getElementById('dom-loading').style.display = 'none';
-        document.getElementById('dom-results').style.display = 'block';
-        document.getElementById('dom-results').style.opacity = '1';
-        document.getElementById('dom-results').style.pointerEvents = 'auto';
+        document.getElementById(`${prefix}-loading`).style.display = 'none';
+        document.getElementById(`${prefix}-results`).style.display = 'block';
+        document.getElementById(`${prefix}-results`).style.opacity = '1';
+        document.getElementById(`${prefix}-results`).style.pointerEvents = 'auto';
 
     } catch (e) {
-        document.getElementById('dom-loading').innerHTML = `<div class="error-msg">Telemetry analysis failed: ${e.message}</div>`;
+        document.getElementById(`${prefix}-loading`).innerHTML = `<div class="error-msg">Telemetry analysis failed: ${e.message}</div>`;
     }
 };
 
-window.toggleMiniSectors = function() {
-    const wrapper = document.getElementById('dom-mini-sectors-wrapper');
-    const btn = document.getElementById('dom-toggle-times-btn');
+window.toggleMiniSectors = function(prefix = 'dom') {
+    const wrapper = document.getElementById(`${prefix}-mini-sectors-wrapper`);
+    const btn = document.getElementById(`${prefix}-toggle-times-btn`);
     if (wrapper.style.display === 'none') {
         wrapper.style.display = 'block';
         btn.textContent = 'Hide Sector Times';
@@ -3613,9 +3385,588 @@ window.openDriverProfile = async function(driverNumber) {
             ${dnss > 0 ? `<div class="stat"><div class="stat-label" style="color: var(--text-muted);">DNS</div><div class="stat-value">${dnss}</div></div>` : ''}
             ${dsqs > 0 ? `<div class="stat"><div class="stat-label" style="color: var(--accent);">DSQ</div><div class="stat-value">${dsqs}</div></div>` : ''}
         `;
+    // --- ADD THIS LINE ---
+        window.renderProfileChampionship(driverNumber, 'driver');
 
     } catch (e) {
         if (resultsWrapper) resultsWrapper.innerHTML = `<div class="error-msg">Could not load profile. ${e.message}</div>`;
+    }
+};
+
+window.renderChampionshipBattle = async function(allYearSessions, sortedDrivers, sortedTeams, driverInfoMap) {
+    const champArea = document.getElementById('season-championship-battle-area');
+    if (!champArea) return;
+
+    // Include Sprint Races as independent plot points!
+    const pointsSessions = allYearSessions.filter(s => {
+        const n = (s.session_name || '').toLowerCase();
+        return (n === 'race' || n === 'sprint') && !n.includes('qualifying') && !n.includes('shoot');
+    });
+    const pastRaces = pointsSessions.filter(s => new Date(s.date_start) < NOW).sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+
+    if (pastRaces.length === 0) {
+        champArea.innerHTML = `<div style="padding:2rem 1rem; text-align:center; color:var(--text-dim);">Not enough data for championship battle yet.</div>`;
+        return;
+    }
+
+    champArea.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing Championship Battle...</div>`;
+
+    try {
+        const [dTimelines, tTimelines] = await Promise.all([
+            Promise.all(pastRaces.map(r => API.fetchJSON(`${Constants.BASE}/championship_drivers?session_key=${r.session_key}`).catch(()=>[]))),
+            Promise.all(pastRaces.map(r => API.fetchJSON(`${Constants.BASE}/championship_teams?session_key=${r.session_key}`).catch(()=>[])))
+        ]);
+
+        const labels = pastRaces.map((r, i) => {
+            const meeting = allMeetings.find(m => m.meeting_key === r.meeting_key);
+            const isSprint = (r.session_name || '').toLowerCase().includes('sprint');
+            const mName = meeting ? meeting.circuit_short_name : `R${i+1}`;
+            return isSprint ? `${mName} (Sprint)` : mName;
+        });
+
+        // Initialize Data Arrays
+        const driverPos = {};
+        const driverAreaData = {};
+        const driverRawPts = {};
+        sortedDrivers.forEach(d => {
+            driverPos[d.driver_number] = [];
+            driverAreaData[d.driver_number] = Array(pastRaces.length).fill(null);
+            driverRawPts[d.driver_number] = Array(pastRaces.length).fill(null);
+        });
+
+        const teamPos = {};
+        const teamAreaData = {};
+        const teamRawPts = {};
+        sortedTeams.forEach(t => {
+            teamPos[t.team_name] = [];
+            teamAreaData[t.team_name] = Array(pastRaces.length).fill(null);
+            teamRawPts[t.team_name] = Array(pastRaces.length).fill(null);
+        });
+
+        pastRaces.forEach((r, i) => {
+            const dData = dTimelines[i] || [];
+            
+            // 1. Calculate Grid Total Points
+            const totalDPts = sortedDrivers.reduce((sum, driver) => {
+                const dObj = dData.find(x => String(x.driver_number) === String(driver.driver_number));
+                return sum + (dObj ? (dObj.points_current || 0) : 0);
+            }, 0) || 1;
+
+            // 2. Map Driver Area Data (Raw Percentages)
+            sortedDrivers.forEach(driver => {
+                const dObj = dData.find(x => String(x.driver_number) === String(driver.driver_number));
+                const pts = dObj ? (dObj.points_current || 0) : 0;
+                
+                driverPos[driver.driver_number].push(dObj ? dObj.position_current : null);
+                driverRawPts[driver.driver_number][i] = { pts, total: totalDPts };
+                driverAreaData[driver.driver_number][i] = (pts / totalDPts) * 100;
+            });
+
+            // 3. Mathematically Sum Team Points
+            let weekTeamPts = {};
+            let totalTPts = 0;
+
+            sortedTeams.forEach(team => {
+                let tPts = 0;
+                const teamDrivers = sortedDrivers.filter(d => {
+                    const info = driverInfoMap[d.driver_number] || {};
+                    return String(info.team_name).toLowerCase() === String(team.team_name).toLowerCase();
+                });
+
+                teamDrivers.forEach(d => {
+                    const dObj = dData.find(x => String(x.driver_number) === String(d.driver_number));
+                    if (dObj) tPts += (dObj.points_current || 0);
+                });
+
+                weekTeamPts[team.team_name] = tPts;
+                totalTPts += tPts;
+            });
+
+            totalTPts = totalTPts || 1;
+
+            // 4. Map Team Area Data (Raw Percentages)
+            const weekTeams = sortedTeams.map(team => ({
+                team_name: team.team_name,
+                pts: weekTeamPts[team.team_name] || 0
+            })).sort((a, b) => b.pts - a.pts);
+
+            weekTeams.forEach((t, idx) => t.rank = idx + 1);
+
+            sortedTeams.forEach(team => {
+                const pts = weekTeamPts[team.team_name] || 0;
+                const rankObj = weekTeams.find(x => x.team_name === team.team_name);
+                const rank = rankObj ? rankObj.rank : null;
+
+                teamPos[team.team_name].push(rank);
+                teamRawPts[team.team_name][i] = { pts, total: totalTPts };
+                teamAreaData[team.team_name][i] = (pts / totalTPts) * 100;
+            });
+        });
+
+        // Clinch Math
+        const futureMeetings = allMeetings.filter(m => !m.is_testing && new Date(m.date_end) >= NOW);
+        const getMeetingMax = (m) => {
+            const hasSprint = allYearSessions.some(s => s.meeting_key === m.meeting_key && s.session_name.toLowerCase().includes('sprint') && !s.session_name.toLowerCase().includes('qualifying') && !s.session_name.toLowerCase().includes('shoot'));
+            return { d: hasSprint ? 34 : 26, t: hasSprint ? 59 : 44 }; 
+        };
+
+        const driverLeader = sortedDrivers[0];
+        const driver2nd = sortedDrivers.length > 1 ? sortedDrivers[1] : null;
+        let dGap = driverLeader && driver2nd ? driverLeader.points_current - driver2nd.points_current : 0;
+        let dClinchRound = "Not Possible Yet";
+
+        if (driverLeader && driver2nd) {
+            const dRemaining = futureMeetings.map(m => getMeetingMax(m).d);
+            let currentSimGap = dGap;
+            for (let i = 0; i < dRemaining.length; i++) {
+                currentSimGap += dRemaining[i]; 
+                const left = dRemaining.slice(i+1).reduce((a,b)=>a+b, 0); 
+                if (currentSimGap > left) {
+                    dClinchRound = `Race ${futureMeetings[i].race_week} (${allMeetings.find(m => m.meeting_key === futureMeetings[i].meeting_key)?.circuit_short_name})`;
+                    break;
+                }
+            }
+        }
+
+        const teamLeader = sortedTeams[0];
+        const team2nd = sortedTeams.length > 1 ? sortedTeams[1] : null;
+        let tGap = teamLeader && team2nd ? teamLeader.points_current - team2nd.points_current : 0;
+        let tClinchRound = "Not Possible Yet";
+
+        if (teamLeader && team2nd) {
+            const tRemaining = futureMeetings.map(m => getMeetingMax(m).t);
+            let currentSimGap = tGap;
+            for (let i = 0; i < tRemaining.length; i++) {
+                currentSimGap += tRemaining[i];
+                const left = tRemaining.slice(i+1).reduce((a,b)=>a+b, 0);
+                if (currentSimGap > left) {
+                    tClinchRound = `Race ${futureMeetings[i].race_week} (${allMeetings.find(m => m.meeting_key === futureMeetings[i].meeting_key)?.circuit_short_name})`;
+                    break;
+                }
+            }
+        }
+
+        const isLight = document.body.dataset.theme === 'light';
+        const gridColor = isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.1)';
+        const tickColor = isLight ? '#222' : '#aaa';
+        const safeId = str => str.replace(/[^a-zA-Z0-9]/g, '_');
+
+        const driverHierarchy = Utils.getDriverHierarchy(driverInfoMap);
+
+        // Rank Chart Datasets (Spaghetti)
+        const dDatasets = sortedDrivers.map((d) => {
+            const info = driverInfoMap[d.driver_number] || {};
+            const tc = Utils.teamColor(info.team_name);
+            return {
+                label: info.name_acronym || info.last_name || `#${d.driver_number}`,
+                driverNumber: d.driver_number,
+                data: driverPos[d.driver_number],
+                borderColor: Utils.convertHexToRGBA(tc.bg, isLight ? 0.6 : 0.8),
+                borderWidth: 2,
+                pointRadius: 0,           
+                pointHoverRadius: 6,
+                fill: false,
+                tension: 0.3,
+                spanGaps: true,
+                order: 1,
+                _origColor: tc.bg,
+                _origWidth: 2,
+                _origOrder: 1
+            };
+        });
+
+        const tDatasets = sortedTeams.map((t) => {
+            const tc = Utils.teamColor(t.team_name);
+            return {
+                label: t.team_name,
+                teamName: t.team_name,
+                data: teamPos[t.team_name],
+                borderColor: Utils.convertHexToRGBA(tc.bg, isLight ? 0.6 : 0.8),
+                borderWidth: 2,
+                pointRadius: 0,           
+                pointHoverRadius: 6,
+                fill: false,
+                tension: 0.3,
+                spanGaps: true,
+                order: 1,
+                _origColor: tc.bg,
+                _origWidth: 2,
+                _origOrder: 1
+            };
+        });
+
+        // Stacked AREA Chart Datasets
+        const dAreaDatasets = sortedDrivers.map((d) => {
+            const info = driverInfoMap[d.driver_number] || {};
+            const tc = Utils.teamColor(info.team_name);
+            const isSecondary = driverHierarchy[d.driver_number] > 0;
+            const bgColor = isSecondary ? Utils.getStripePattern(tc.bg, isLight) : Utils.convertHexToRGBA(tc.bg, 0.85);
+
+            return {
+                label: info.name_acronym || info.last_name || `#${d.driver_number}`,
+                data: driverAreaData[d.driver_number],
+                _rawPts: driverRawPts[d.driver_number],
+                backgroundColor: bgColor,
+                borderColor: isLight ? '#ffffff' : '#1a1a1a', 
+                borderWidth: 1,
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                tension: 0.3, // Slight curve for the area flow
+                order: 1
+            };
+        });
+
+        const tAreaDatasets = sortedTeams.map((t) => {
+            const tc = Utils.teamColor(t.team_name);
+            return {
+                label: t.team_name,
+                data: teamAreaData[t.team_name],
+                _rawPts: teamRawPts[t.team_name],
+                backgroundColor: Utils.convertHexToRGBA(tc.bg, 0.85),
+                borderColor: isLight ? '#ffffff' : '#1a1a1a',
+                borderWidth: 1,
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                tension: 0.3,
+                order: 1
+            };
+        });
+
+        // Generate legends
+        let dLegendHtml = sortedDrivers.map((d) => {
+            const info = driverInfoMap[d.driver_number] || {};
+            const tc = Utils.teamColor(info.team_name);
+            const acronym = info.name_acronym || (info.last_name ? info.last_name.substring(0,3).toUpperCase() : '???');
+            return `<div id="leg-champ-d-${d.driver_number}" 
+                 onclick="window.openDriverProfile(${d.driver_number}); setTimeout(() => window.switchProfileSubTab('championship'), 50);"
+                 onmouseenter="window.highlightChampLine('driver', ${d.driver_number})"
+                 onmouseleave="window.resetChampLines('driver')"
+                 style="position: absolute; left: 8px; display:flex; align-items:center; gap:6px; font-family:'Barlow Condensed'; font-weight:700; font-size:0.72rem; color:var(--text); cursor:pointer; transition: top 0.2s, opacity 0.2s; white-space:nowrap; transform: translateY(-50%);">
+                <div style="width:4px; height:12px; background:${tc.bg}; border-radius:1px;"></div>
+                <div style="width:16px; display:flex; justify-content:center;">${Utils.getTeamLogoHtml(info.team_name, '10px')}</div>
+                <span>${acronym}</span>
+            </div>`;
+        }).join('');
+
+        let tLegendHtml = sortedTeams.map((t) => {
+            const tc = Utils.teamColor(t.team_name);
+            const safeName = t.team_name.replace(/'/g, "\\'"); 
+            return `<div id="leg-champ-t-${safeId(t.team_name)}" 
+                 onclick="window.openTeamProfile('${safeName}'); setTimeout(() => window.switchTeamSubTab('championship'), 50);"
+                 onmouseenter="window.highlightChampLine('team', '${safeName}')"
+                 onmouseleave="window.resetChampLines('team')"
+                 style="position: absolute; left: 8px; display:flex; align-items:center; gap:6px; font-family:'Barlow Condensed'; font-weight:700; font-size:0.72rem; color:var(--text); cursor:pointer; transition: top 0.2s, opacity 0.2s; white-space:nowrap; transform: translateY(-50%);">
+                <div style="width:4px; height:12px; background:${tc.bg}; border-radius:1px;"></div>
+                <div style="width:16px; display:flex; justify-content:center;">${Utils.getTeamLogoHtml(t.team_name, '10px')}</div>
+                <span>${Utils.getShortTeamName(t.team_name)}</span>
+            </div>`;
+        }).join('');
+
+        let dBarLegendHtml = `<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.75rem; margin-top:1.5rem;">`;
+        sortedDrivers.forEach(d => {
+            const info = driverInfoMap[d.driver_number] || {};
+            const tc = Utils.teamColor(info.team_name);
+            const acronym = info.name_acronym || info.last_name || `#${d.driver_number}`;
+            const isSecondary = driverHierarchy[d.driver_number] > 0;
+            
+            dBarLegendHtml += `
+                <div class="driver-num-badge" 
+                     onclick="window.openDriverProfile(${d.driver_number}); setTimeout(() => window.switchProfileSubTab('championship'), 50);"
+                     style="background:${isSecondary ? 'transparent' : tc.bg}; border:${isSecondary ? '2px dashed '+tc.bg : '2px solid '+tc.bg}; color:${isSecondary ? 'var(--text)' : tc.text}; width:68px; flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; box-sizing: border-box; transition: transform 0.15s;" 
+                     onmouseover="this.style.transform='translateY(-2px)';" 
+                     onmouseout="this.style.transform='translateY(0)';"
+                     title="${info.full_name || acronym}">
+                    ${Utils.getTeamLogoHtml(info.team_name, '10px', isSecondary ? null : tc.text)}
+                    <span style="font-size:0.85rem; letter-spacing:0.05em; font-weight:700;">${acronym}</span>
+                </div>
+            `;
+        });
+        dBarLegendHtml += `</div>`;
+
+        let tBarLegendHtml = `<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:0.75rem; margin-top:1.5rem;">`;
+        sortedTeams.forEach(t => {
+            const tc = Utils.teamColor(t.team_name);
+            const safeName = t.team_name.replace(/'/g, "\\'"); 
+            tBarLegendHtml += `
+                <div class="driver-num-badge" 
+                     onclick="window.openTeamProfile('${safeName}'); setTimeout(() => window.switchTeamSubTab('championship'), 50);"
+                     style="background:${tc.bg}; border:2px solid ${tc.bg}; padding: 0 10px; min-width:48px; height:26px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; box-sizing: border-box; transition: transform 0.15s;" 
+                     onmouseover="this.style.transform='translateY(-2px)';" 
+                     onmouseout="this.style.transform='translateY(0)';"
+                     title="${t.team_name}">
+                    ${Utils.getTeamLogoHtml(t.team_name, '14px', tc.text)}
+                    <span style="font-size:0.85rem; letter-spacing:0.05em; font-weight:700; color:${tc.text}">${Utils.getShortTeamName(t.team_name)}</span>
+                </div>
+            `;
+        });
+        tBarLegendHtml += `</div>`;
+
+        champArea.style.padding = '0';
+        champArea.style.textAlign = 'left';
+
+        // --- THE FIX: Wrap the charts in a dedicated Sub-Tab Menu! ---
+        champArea.innerHTML = `
+            <div class="subtabs" id="season-champ-subtabs" style="margin-top: 1.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); gap: 2rem;">
+                <button class="subtab-btn active" id="season-champ-btn-driver" onclick="window.switchSeasonChampSubTab('driver')">Driver Standings</button>
+                <button class="subtab-btn" id="season-champ-btn-team" onclick="window.switchSeasonChampSubTab('team')">Constructor Standings</button>
+            </div>
+
+            <div id="season-champ-content-driver" class="subtab-content active">
+                <div class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; padding: 0 0.5rem;">
+                    <span>Driver Championship Rank</span>
+                    <span style="color:var(--text-muted); text-transform:none;">Earliest Theoretical Clinch: <span style="color:var(--text); font-weight:900; text-transform:uppercase;">${dClinchRound}</span></span>
+                </div>
+                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:2.5rem; width: 100%;">
+                    <div style="display: flex; gap: 0.5rem; height: 500px; width: 100%; position: relative;">
+                        <div style="flex: 1; position: relative;">
+                            <canvas id="champ-driver-chart"></canvas>
+                        </div>
+                        <div id="chart-legend-champ-driver" style="width: 75px; position: relative; border-left: 1px solid var(--border);">
+                            ${dLegendHtml}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; padding: 0 0.5rem;">
+                    <span>Driver Points Share (%)</span>
+                </div>
+                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:2.5rem; width: 100%;">
+                    <div style="height: 400px; width: 100%; position: relative;">
+                        <canvas id="champ-driver-area-chart"></canvas>
+                    </div>
+                    ${dBarLegendHtml}
+                </div>
+            </div>
+
+            <div id="season-champ-content-team" class="subtab-content">
+                <div class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; padding: 0 0.5rem;">
+                    <span>Constructor Championship Rank</span>
+                    <span style="color:var(--text-muted); text-transform:none;">Earliest Theoretical Clinch: <span style="color:var(--text); font-weight:900; text-transform:uppercase;">${tClinchRound}</span></span>
+                </div>
+                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:2.5rem; width: 100%;">
+                    <div style="display: flex; gap: 0.5rem; height: 500px; width: 100%; position: relative;">
+                        <div style="flex: 1; position: relative;">
+                            <canvas id="champ-team-chart"></canvas>
+                        </div>
+                        <div id="chart-legend-champ-team" style="width: 75px; position: relative; border-left: 1px solid var(--border);">
+                            ${tLegendHtml}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; padding: 0 0.5rem;">
+                    <span>Constructor Points Share (%)</span>
+                </div>
+                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:1rem; width: 100%;">
+                    <div style="height: 400px; width: 100%; position: relative;">
+                        <canvas id="champ-team-area-chart"></canvas>
+                    </div>
+                    ${tBarLegendHtml}
+                </div>
+            </div>
+        `;
+
+        window.highlightChampLine = (type, id) => {
+            const chart = type === 'driver' ? window.champDriverChartInst : window.champTeamChartInst;
+            if (!chart) return;
+            
+            chart.data.datasets.forEach(ds => {
+                const isTarget = type === 'driver' ? ds.driverNumber === id : ds.teamName === id;
+                if (isTarget) {
+                    ds.borderColor = Utils.convertHexToRGBA(ds._origColor, 1.0);
+                    ds.borderWidth = 5;
+                    ds.order = 0; 
+                } else {
+                    ds.borderColor = Utils.convertHexToRGBA(ds._origColor, isLight ? 0.1 : 0.05);
+                    ds.borderWidth = 1.5;
+                    ds.order = 1;
+                }
+            });
+            chart.update('none'); 
+
+            chart.data.datasets.forEach(ds => {
+                const itemId = type === 'driver' ? `leg-champ-d-${ds.driverNumber}` : `leg-champ-t-${safeId(ds.teamName)}`;
+                const item = document.getElementById(itemId);
+                if (item) {
+                    const isTarget = type === 'driver' ? ds.driverNumber === id : ds.teamName === id;
+                    item.style.opacity = isTarget ? '1' : '0.2';
+                }
+            });
+        };
+
+        window.resetChampLines = (type) => {
+            const chart = type === 'driver' ? window.champDriverChartInst : window.champTeamChartInst;
+            if (!chart) return;
+            
+            chart.data.datasets.forEach(ds => {
+                ds.borderColor = Utils.convertHexToRGBA(ds._origColor, isLight ? 0.6 : 0.8);
+                ds.borderWidth = ds._origWidth;
+                ds.order = ds._origOrder;
+            });
+            chart.update('none');
+
+            chart.data.datasets.forEach(ds => {
+                const itemId = type === 'driver' ? `leg-champ-d-${ds.driverNumber}` : `leg-champ-t-${safeId(ds.teamName)}`;
+                const item = document.getElementById(itemId);
+                if (item) item.style.opacity = '1';
+            });
+        };
+
+        const legendSyncPlugin = {
+            id: 'legendSync',
+            afterLayout(chart) {
+                const yAxis = chart.scales.y;
+                chart.data.datasets.forEach(ds => {
+                    const isDriver = ds.driverNumber !== undefined;
+                    const itemId = isDriver ? `leg-champ-d-${ds.driverNumber}` : `leg-champ-t-${safeId(ds.teamName)}`;
+                    const item = document.getElementById(itemId);
+                    
+                    let lastVal = null;
+                    for (let i = ds.data.length - 1; i >= 0; i--) {
+                        if (ds.data[i] !== null) { lastVal = ds.data[i]; break; }
+                    }
+                    
+                    if (item && lastVal !== null) {
+                        const yPixel = yAxis.getPixelForValue(lastVal);
+                        item.style.top = `${yPixel}px`;
+                        item.style.display = 'flex';
+                    } else if (item) {
+                        item.style.display = 'none';
+                    }
+                });
+            }
+        };
+
+        const baseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'nearest', axis: 'xy', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: { titleFont: { family: 'Barlow Condensed', size: 14 }, bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 } }
+            }
+        };
+
+        const dOptions = {
+            ...baseOptions,
+            onHover: (e, elements, chart) => {
+                if (elements && elements.length) {
+                    window.highlightChampLine('driver', chart.data.datasets[elements[0].datasetIndex].driverNumber);
+                }
+            },
+            scales: {
+                x: { ticks: { color: tickColor, font: { family: 'Barlow Condensed', weight: 600 } }, grid: { color: gridColor } },
+                y: { 
+                    reverse: true, min: 1, max: sortedDrivers.length,
+                    title: { display: true, text: 'Championship Rank', color: tickColor, font: { family: 'Barlow Condensed' } }, 
+                    grid: { color: gridColor }, 
+                    ticks: { stepSize: 1, color: tickColor, callback: v => 'P' + v, font: { family: 'Barlow Condensed', weight: 700 } } 
+                }
+            }
+        };
+
+        const tOptions = {
+            ...baseOptions,
+            onHover: (e, elements, chart) => {
+                if (elements && elements.length) {
+                    window.highlightChampLine('team', chart.data.datasets[elements[0].datasetIndex].teamName);
+                }
+            },
+            scales: {
+                x: { ticks: { color: tickColor, font: { family: 'Barlow Condensed', weight: 600 } }, grid: { color: gridColor } },
+                y: { 
+                    reverse: true, min: 1, max: sortedTeams.length,
+                    title: { display: true, text: 'Championship Rank', color: tickColor, font: { family: 'Barlow Condensed' } }, 
+                    grid: { color: gridColor }, 
+                    ticks: { stepSize: 1, color: tickColor, callback: v => 'P' + v, font: { family: 'Barlow Condensed', weight: 700 } } 
+                }
+            }
+        };
+
+        if (window.champDriverChartInst) window.champDriverChartInst.destroy();
+        window.champDriverChartInst = new Chart(document.getElementById('champ-driver-chart').getContext('2d'), {
+            type: 'line', data: { labels, datasets: dDatasets }, options: dOptions, plugins: [legendSyncPlugin]
+        });
+
+        if (window.champTeamChartInst) window.champTeamChartInst.destroy();
+        window.champTeamChartInst = new Chart(document.getElementById('champ-team-chart').getContext('2d'), {
+            type: 'line', data: { labels, datasets: tDatasets }, options: tOptions, plugins: [legendSyncPlugin]
+        });
+
+        // THE FIX: Stacked Area Chart Options
+        const areaOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'nearest', axis: 'xy', intersect: true }, 
+            plugins: {
+                legend: { display: false },
+                tooltip: { 
+                    enabled: true,
+                    titleFont: { family: 'Barlow Condensed', size: 14 }, 
+                    bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 },
+                    callbacks: {
+                        label: function(context) {
+                            const ds = context.dataset;
+                            const idx = context.dataIndex;
+                            const raw = ds._rawPts[idx];
+                            if (!raw || raw.pts === 0) return null; 
+                            
+                            // For standard stacked area, context.raw is the value we passed in (the pct).
+                            const pct = Number(context.raw).toFixed(1) + '%';
+                            return `${ds.label}: ${pct} (${raw.pts} / ${raw.total} pts)`;
+                        }
+                    }
+                } 
+            },
+            scales: {
+                x: { 
+                    stacked: true, // Often needed for stacked lines to render x-axis bounds correctly
+                    ticks: { color: tickColor, font: { family: 'Barlow Condensed', weight: 600 } }, 
+                    grid: { display: false } 
+                },
+                y: { 
+                    stacked: true, // Crucial for Stacked Area
+                    min: 0, 
+                    max: 100,
+                    title: { display: true, text: '% of Cumulative Points', color: tickColor, font: { family: 'Barlow Condensed' } }, 
+                    grid: { color: gridColor }, 
+                    ticks: { color: tickColor, font: { family: 'Barlow Condensed' }, callback: v => v + '%' } 
+                }
+            }
+        };
+
+        // --- THE FIX: Defer chart initialization until the DOM is fully painted ---
+        setTimeout(() => {
+            if (window.champDriverChartInst) window.champDriverChartInst.destroy();
+            window.champDriverChartInst = new Chart(document.getElementById('champ-driver-chart').getContext('2d'), {
+                type: 'line', data: { labels, datasets: dDatasets }, options: dOptions, plugins: [legendSyncPlugin]
+            });
+
+            if (window.champTeamChartInst) window.champTeamChartInst.destroy();
+            window.champTeamChartInst = new Chart(document.getElementById('champ-team-chart').getContext('2d'), {
+                type: 'line', data: { labels, datasets: tDatasets }, options: tOptions, plugins: [legendSyncPlugin]
+            });
+
+            if (window.champDriverAreaChartInst) window.champDriverAreaChartInst.destroy();
+            window.champDriverAreaChartInst = new Chart(document.getElementById('champ-driver-area-chart').getContext('2d'), {
+                type: 'line', data: { labels, datasets: dAreaDatasets }, options: areaOptions
+            });
+
+            if (window.champTeamAreaChartInst) window.champTeamAreaChartInst.destroy();
+            window.champTeamAreaChartInst = new Chart(document.getElementById('champ-team-area-chart').getContext('2d'), {
+                type: 'line', data: { labels, datasets: tAreaDatasets }, options: areaOptions
+            });
+
+            // Explicitly trigger the tab switch to force the layout dimensions
+            window.switchSeasonChampSubTab('driver');
+        }, 50); 
+        // --------------------------------------------------------------------------
+
+    } catch (e) {
+        console.error(e);
+        champArea.innerHTML = `<div class="error-msg">Could not load championship timeline: ${e.message}</div>`;
     }
 };
 
@@ -4503,8 +4854,618 @@ window.openTeamProfile = async function(teamName) {
             ${dsqs > 0 ? `<div class="stat"><div class="stat-label" style="color: var(--accent);">DSQ</div><div class="stat-value">${dsqs}</div></div>` : ''}
         `;
 
+        window.renderProfileChampionship(teamName, 'team');
+
     } catch (e) {
         list.innerHTML = `<div class="error-msg">Could not load team profile. ${e.message}</div>`;
+    }
+};
+
+window.renderProfileChampionship = async function(entityId, type) {
+    const containerId = type === 'driver' ? 'profile-subtab-content-championship' : 'team-subtab-content-championship';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing Championship Timeline...</div>`;
+
+    try {
+        const allYearSessions = await API.fetchJSON(`${Constants.BASE}/sessions?year=${currentYear}`);
+        const raceSessions = allYearSessions.filter(s => s.session_name.toLowerCase() === 'race');
+        const pastRaces = raceSessions.filter(s => new Date(s.date_start) < NOW).sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+
+        if (pastRaces.length === 0) {
+            container.innerHTML = `<div style="padding:2rem 1rem; text-align:center; color:var(--text-dim);">Not enough data for championship battle yet.</div>`;
+            return;
+        }
+
+        const latestRace = pastRaces[pastRaces.length - 1];
+        const allDrivers = await API.fetchJSON(`${Constants.BASE}/drivers?session_key=${latestRace.session_key}`);
+        const driverInfoMap = {};
+        for (const d of allDrivers) driverInfoMap[d.driver_number] = d;
+        Object.keys(Constants.HISTORICAL_DRIVERS).forEach(num => {
+            if (!driverInfoMap[num]) driverInfoMap[num] = Constants.HISTORICAL_DRIVERS[num];
+        });
+
+        const timelines = await Promise.all(pastRaces.map(r => API.fetchJSON(`${Constants.BASE}/championship_drivers?session_key=${r.session_key}`).catch(()=>[])));
+
+        const labels = [];
+        const posData = {};
+
+        let entities = [];
+        if (type === 'driver') {
+            entities = Object.values(driverInfoMap);
+        } else {
+            const teamSet = new Set();
+            Object.values(driverInfoMap).forEach(d => { if (d.team_name) teamSet.add(d.team_name); });
+            entities = Array.from(teamSet).map(t => ({ team_name: t }));
+        }
+
+        const teamDriverMap = {};
+        if (type === 'team') {
+            entities.forEach(t => teamDriverMap[t.team_name] = []);
+            Object.values(driverInfoMap).forEach(d => {
+                const tName = d.team_name;
+                if (tName) {
+                    const matched = entities.find(st => st.team_name === tName || st.team_name.includes(tName) || tName.includes(st.team_name));
+                    if (matched) teamDriverMap[matched.team_name].push(d.driver_number);
+                }
+            });
+        }
+
+        entities.forEach(e => {
+            const key = type === 'driver' ? e.driver_number : e.team_name;
+            posData[key] = [];
+        });
+
+        pastRaces.forEach((r, i) => {
+            const meeting = allMeetings.find(m => m.meeting_key === r.meeting_key);
+            labels.push(meeting ? meeting.circuit_short_name : `R${i+1}`);
+
+            const data = timelines[i] || [];
+            
+            // Generate manual team rankings for this week just like the main view!
+            let weekTeamPts = {};
+            if (type === 'team') {
+                entities.forEach(team => {
+                    let tPts = 0;
+                    const driversForTeam = teamDriverMap[team.team_name] || [];
+                    driversForTeam.forEach(dn => {
+                        const dObj = data.find(x => String(x.driver_number) === String(dn));
+                        if (dObj) tPts += (dObj.points_current || 0);
+                    });
+                    weekTeamPts[team.team_name] = tPts;
+                });
+            }
+
+            const teamStandingsThisWeek = type === 'team' ? entities.map(team => ({
+                team_name: team.team_name,
+                pts: weekTeamPts[team.team_name] || 0
+            })).sort((a, b) => b.pts - a.pts) : [];
+
+            teamStandingsThisWeek.forEach((t, idx) => t.rank = idx + 1);
+
+            entities.forEach(e => {
+                const key = type === 'driver' ? e.driver_number : e.team_name;
+                
+                if (type === 'driver') {
+                    const obj = data.find(x => String(x.driver_number) === String(key));
+                    posData[key].push(obj ? obj.position_current : null);
+                } else {
+                    const rankObj = teamStandingsThisWeek.find(x => String(x.team_name) === String(key));
+                    posData[key].push(rankObj ? rankObj.rank : null);
+                }
+            });
+        });
+
+        const isLight = document.body.dataset.theme === 'light';
+        const gridColor = isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.1)';
+        const tickColor = isLight ? '#222' : '#aaa';
+
+        const datasets = [];
+        const activeEntities = entities.filter(e => {
+            const key = type === 'driver' ? e.driver_number : e.team_name;
+            return posData[key].some(v => v !== null);
+        });
+        
+        const safeId = str => str.replace(/[^a-zA-Z0-9]/g, '_');
+        
+        // Grab the hierarchy globally
+        const driverHierarchy = Utils.getDriverHierarchy(driverInfoMap);
+
+        activeEntities.forEach(e => {
+            const key = type === 'driver' ? e.driver_number : e.team_name;
+            const isTarget = String(key) === String(entityId);
+            const tName = type === 'driver' ? e.team_name : e.team_name;
+            const tc = Utils.teamColor(tName);
+            
+            // Use the global hierarchy to consistently set dashes
+            const isSecondary = type === 'driver' ? (driverHierarchy[e.driver_number] > 0) : false;
+            const dashStyle = (isSecondary && !isTarget) ? [5, 5] : [];
+            const opacity = isTarget ? 1.0 : (isLight ? 0.35 : 0.15);
+            
+            datasets.push({
+                label: type === 'driver' ? (e.name_acronym || e.last_name || `#${key}`) : key,
+                _entityKey: key,
+                data: posData[key],
+                borderColor: Utils.convertHexToRGBA(tc.bg, opacity),
+                borderWidth: isTarget ? 5 : 2,
+                borderDash: dashStyle,
+                pointRadius: 0,                           
+                pointHoverRadius: isTarget ? 6 : 4,
+                fill: false,
+                tension: 0.3,
+                spanGaps: true,
+                order: isTarget ? 0 : 1,
+                _origColor: tc.bg,
+                _origWidth: isTarget ? 5 : 2,
+                _origOrder: isTarget ? 0 : 1,
+                _origDash: dashStyle
+            });
+        });
+
+        const chartCanvasId = `profile-champ-chart-${type}`;
+        
+        let legendItemsHtml = activeEntities.map(e => {
+            const key = type === 'driver' ? e.driver_number : e.team_name;
+            const isTarget = String(key) === String(entityId);
+            const tName = type === 'driver' ? e.team_name : e.team_name;
+            const tc = Utils.teamColor(tName);
+            const acronym = type === 'driver' ? (e.name_acronym || (e.last_name ? e.last_name.substring(0,3).toUpperCase() : '???')) : Utils.getShortTeamName(key);
+            const isDimmed = !isTarget;
+            
+            const onClick = type === 'driver' 
+                ? `previousView='view-drivers'; window.openDriverProfile(${key}); setTimeout(() => window.switchProfileSubTab('championship'), 50);` 
+                : `window.openTeamProfile('${String(key).replace(/'/g, "\\\\")}'); setTimeout(() => window.switchTeamSubTab('championship'), 50);`;
+
+            return `<div id="leg-prof-champ-${safeId(String(key))}" 
+                 onclick="${onClick}"
+                 onmouseenter="window.highlightProfileChampLine('${type}', '${key}')"
+                 onmouseleave="window.resetProfileChampLines('${type}')"
+                 style="position: absolute; left: 8px; display:flex; align-items:center; gap:6px; font-family:'Barlow Condensed'; font-weight:700; font-size:0.72rem; color:var(--text); cursor:pointer; opacity:${isDimmed ? 0.3 : 1}; transition: top 0.2s, opacity 0.2s; white-space:nowrap; transform: translateY(-50%);">
+                <div style="width:4px; height:12px; background:${tc.bg}; border-radius:1px;"></div>
+                <div style="width:16px; display:flex; justify-content:center;">${Utils.getTeamLogoHtml(tName, '10px')}</div>
+                <span>${acronym}</span>
+            </div>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div style="max-width: 1000px; margin: 0 auto;">
+                <div class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+                    <span>Championship Rank Tracker</span>
+                </div>
+                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:2.5rem; width: 100%;">
+                    <div style="display: flex; gap: 0.5rem; height: 500px; width: 100%; position: relative;">
+                        <div style="flex: 1; position: relative;">
+                            <canvas id="${chartCanvasId}"></canvas>
+                        </div>
+                        <div style="width: 75px; position: relative; border-left: 1px solid var(--border);">
+                            ${legendItemsHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        window.highlightProfileChampLine = (pType, id) => {
+            const chart = window[`profileChampChartInst_${pType}`];
+            if (!chart) return;
+            chart.data.datasets.forEach(ds => {
+                const isTarget = String(ds._entityKey) === String(id);
+                if (isTarget) {
+                    ds.borderColor = Utils.convertHexToRGBA(ds._origColor, 1.0);
+                    ds.borderWidth = 5;
+                    ds.order = 0; 
+                } else {
+                    ds.borderColor = Utils.convertHexToRGBA(ds._origColor, isLight ? 0.1 : 0.05);
+                    ds.borderWidth = 1.5;
+                    ds.order = 1;
+                }
+            });
+            chart.update('none'); 
+
+            chart.data.datasets.forEach(ds => {
+                const itemId = `leg-prof-champ-${safeId(String(ds._entityKey))}`;
+                const item = document.getElementById(itemId);
+                if (item) {
+                    const isTarget = String(ds._entityKey) === String(id);
+                    item.style.opacity = isTarget ? '1' : '0.2';
+                }
+            });
+        };
+
+        window.resetProfileChampLines = (pType) => {
+            const chart = window[`profileChampChartInst_${pType}`];
+            if (!chart) return;
+            chart.data.datasets.forEach(ds => {
+                ds.borderColor = ds._origColor;
+                ds.borderWidth = ds._origWidth;
+                ds.order = ds._origOrder;
+            });
+            chart.update('none');
+
+            chart.data.datasets.forEach(ds => {
+                const isTarget = String(ds._entityKey) === String(entityId);
+                const itemId = `leg-prof-champ-${safeId(String(ds._entityKey))}`;
+                const item = document.getElementById(itemId);
+                if (item) item.style.opacity = isTarget ? '1' : '0.3';
+            });
+        };
+
+        const legendSyncPlugin = {
+            id: 'legendSync',
+            afterLayout(chart) {
+                const yAxis = chart.scales.y;
+                chart.data.datasets.forEach(ds => {
+                    const itemId = `leg-prof-champ-${safeId(String(ds._entityKey))}`;
+                    const item = document.getElementById(itemId);
+                    
+                    let lastVal = null;
+                    for (let i = ds.data.length - 1; i >= 0; i--) {
+                        if (ds.data[i] !== null) { lastVal = ds.data[i]; break; }
+                    }
+                    
+                    if (item && lastVal !== null) {
+                        const yPixel = yAxis.getPixelForValue(lastVal);
+                        item.style.top = `${yPixel}px`;
+                        item.style.display = 'flex';
+                    } else if (item) {
+                        item.style.display = 'none';
+                    }
+                });
+            }
+        };
+
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'nearest', axis: 'xy', intersect: false },
+            onHover: (e, elements, chart) => {
+                if (elements && elements.length) {
+                    window.highlightProfileChampLine(type, chart.data.datasets[elements[0].datasetIndex]._entityKey);
+                }
+            },
+            plugins: {
+                legend: { display: false }, 
+                tooltip: { 
+                    titleFont: { family: 'Barlow Condensed', size: 14 }, 
+                    bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 },
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            if (context.parsed.y !== null) {
+                                label += 'P' + context.parsed.y;
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { color: tickColor, font: { family: 'Barlow Condensed', weight: 600 } }, grid: { color: gridColor } },
+                y: { 
+                    reverse: true, min: 1, max: activeEntities.length,
+                    title: { display: true, text: 'Championship Rank', color: tickColor, font: { family: 'Barlow Condensed' } }, 
+                    grid: { color: gridColor }, 
+                    ticks: { stepSize: 1, color: tickColor, callback: v => 'P' + v, font: { family: 'Barlow Condensed', weight: 700 } } 
+                }
+            }
+        };
+
+        if (window[`profileChampChartInst_${type}`]) window[`profileChampChartInst_${type}`].destroy();
+        window[`profileChampChartInst_${type}`] = new Chart(document.getElementById(chartCanvasId).getContext('2d'), {
+            type: 'line', data: { labels, datasets }, options: chartOptions, plugins: [legendSyncPlugin]
+        });
+
+        document.getElementById(chartCanvasId).onmouseleave = () => window.resetProfileChampLines(type);
+
+    } catch(e) {
+        console.error(e);
+        container.innerHTML = `<div class="error-msg">Failed to load championship timeline: ${e.message}</div>`;
+    }
+};
+
+window.renderProfileChampionship = async function(entityId, type) {
+    const containerId = type === 'driver' ? 'profile-subtab-content-championship' : 'team-subtab-content-championship';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing Championship Timeline...</div>`;
+
+    try {
+        const allYearSessions = await API.fetchJSON(`${Constants.BASE}/sessions?year=${currentYear}`);
+        const raceSessions = allYearSessions.filter(s => s.session_name.toLowerCase() === 'race');
+        const pastRaces = raceSessions.filter(s => new Date(s.date_start) < NOW).sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+
+        if (pastRaces.length === 0) {
+            container.innerHTML = `<div style="padding:2rem 1rem; text-align:center; color:var(--text-dim);">Not enough data for championship battle yet.</div>`;
+            return;
+        }
+
+        const latestRace = pastRaces[pastRaces.length - 1];
+        const allDrivers = await API.fetchJSON(`${Constants.BASE}/drivers?session_key=${latestRace.session_key}`);
+        const driverInfoMap = {};
+        for (const d of allDrivers) driverInfoMap[d.driver_number] = d;
+        Object.keys(Constants.HISTORICAL_DRIVERS).forEach(num => {
+            if (!driverInfoMap[num]) driverInfoMap[num] = Constants.HISTORICAL_DRIVERS[num];
+        });
+
+        const timelines = await Promise.all(pastRaces.map(r => API.fetchJSON(`${Constants.BASE}/championship_drivers?session_key=${r.session_key}`).catch(()=>[])));
+
+        const labels = [];
+        const posData = {};
+
+        let entities = [];
+        if (type === 'driver') {
+            entities = Object.values(driverInfoMap);
+        } else {
+            const teamSet = new Set();
+            Object.values(driverInfoMap).forEach(d => { if (d.team_name) teamSet.add(d.team_name); });
+            entities = Array.from(teamSet).map(t => ({ team_name: t }));
+        }
+
+        const teamDriverMap = {};
+        if (type === 'team') {
+            entities.forEach(t => teamDriverMap[t.team_name] = []);
+            Object.values(driverInfoMap).forEach(d => {
+                const tName = d.team_name;
+                if (tName) {
+                    const matched = entities.find(st => st.team_name === tName || st.team_name.includes(tName) || tName.includes(st.team_name));
+                    if (matched) teamDriverMap[matched.team_name].push(d.driver_number);
+                }
+            });
+        }
+
+        entities.forEach(e => {
+            const key = type === 'driver' ? e.driver_number : e.team_name;
+            posData[key] = [];
+        });
+
+        pastRaces.forEach((r, i) => {
+            const meeting = allMeetings.find(m => m.meeting_key === r.meeting_key);
+            labels.push(meeting ? meeting.circuit_short_name : `R${i+1}`);
+
+            const data = timelines[i] || [];
+            
+            // Generate manual team rankings for this week just like the main view!
+            let weekTeamPts = {};
+            if (type === 'team') {
+                entities.forEach(team => {
+                    let tPts = 0;
+                    const driversForTeam = teamDriverMap[team.team_name] || [];
+                    driversForTeam.forEach(dn => {
+                        const dObj = data.find(x => String(x.driver_number) === String(dn));
+                        if (dObj) tPts += (dObj.points_current || 0);
+                    });
+                    weekTeamPts[team.team_name] = tPts;
+                });
+            }
+
+            const teamStandingsThisWeek = type === 'team' ? entities.map(team => ({
+                team_name: team.team_name,
+                pts: weekTeamPts[team.team_name] || 0
+            })).sort((a, b) => b.pts - a.pts) : [];
+
+            teamStandingsThisWeek.forEach((t, idx) => t.rank = idx + 1);
+
+            entities.forEach(e => {
+                const key = type === 'driver' ? e.driver_number : e.team_name;
+                
+                if (type === 'driver') {
+                    const obj = data.find(x => String(x.driver_number) === String(key));
+                    posData[key].push(obj ? obj.position_current : null);
+                } else {
+                    const rankObj = teamStandingsThisWeek.find(x => String(x.team_name) === String(key));
+                    posData[key].push(rankObj ? rankObj.rank : null);
+                }
+            });
+        });
+
+        const isLight = document.body.dataset.theme === 'light';
+        const gridColor = isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.1)';
+        const tickColor = isLight ? '#222' : '#aaa';
+
+        const datasets = [];
+        const activeEntities = entities.filter(e => {
+            const key = type === 'driver' ? e.driver_number : e.team_name;
+            return posData[key].some(v => v !== null);
+        });
+        
+        const safeId = str => str.replace(/[^a-zA-Z0-9]/g, '_');
+        
+        // Grab the hierarchy globally
+        const driverHierarchy = Utils.getDriverHierarchy(driverInfoMap);
+
+        activeEntities.forEach(e => {
+            const key = type === 'driver' ? e.driver_number : e.team_name;
+            const isTarget = String(key) === String(entityId);
+            const tName = type === 'driver' ? e.team_name : e.team_name;
+            const tc = Utils.teamColor(tName);
+            
+            // Use the global hierarchy to consistently set dashes
+            const isSecondary = type === 'driver' ? (driverHierarchy[e.driver_number] > 0) : false;
+            const dashStyle = (isSecondary && !isTarget) ? [5, 5] : [];
+            const opacity = isTarget ? 1.0 : (isLight ? 0.35 : 0.15);
+            
+            datasets.push({
+                label: type === 'driver' ? (e.name_acronym || e.last_name || `#${key}`) : key,
+                _entityKey: key,
+                data: posData[key],
+                borderColor: Utils.convertHexToRGBA(tc.bg, opacity),
+                borderWidth: isTarget ? 5 : 2,
+                borderDash: dashStyle,
+                pointRadius: 0,                           
+                pointHoverRadius: isTarget ? 6 : 4,
+                fill: false,
+                tension: 0.3,
+                spanGaps: true,
+                order: isTarget ? 0 : 1,
+                _origColor: tc.bg,
+                _origWidth: isTarget ? 5 : 2,
+                _origOrder: isTarget ? 0 : 1,
+                _origDash: dashStyle
+            });
+        });
+
+        const chartCanvasId = `profile-champ-chart-${type}`;
+        
+        let legendItemsHtml = activeEntities.map(e => {
+            const key = type === 'driver' ? e.driver_number : e.team_name;
+            const isTarget = String(key) === String(entityId);
+            const tName = type === 'driver' ? e.team_name : e.team_name;
+            const tc = Utils.teamColor(tName);
+            const acronym = type === 'driver' ? (e.name_acronym || (e.last_name ? e.last_name.substring(0,3).toUpperCase() : '???')) : Utils.getShortTeamName(key);
+            const isDimmed = !isTarget;
+            
+            const onClick = type === 'driver' 
+                ? `previousView='view-drivers'; window.openDriverProfile(${key}); setTimeout(() => window.switchProfileSubTab('championship'), 50);` 
+                : `window.openTeamProfile('${String(key).replace(/'/g, "\\\\")}'); setTimeout(() => window.switchTeamSubTab('championship'), 50);`;
+
+            return `<div id="leg-prof-champ-${safeId(String(key))}" 
+                 onclick="${onClick}"
+                 onmouseenter="window.highlightProfileChampLine('${type}', '${key}')"
+                 onmouseleave="window.resetProfileChampLines('${type}')"
+                 style="position: absolute; left: 8px; display:flex; align-items:center; gap:6px; font-family:'Barlow Condensed'; font-weight:700; font-size:0.72rem; color:var(--text); cursor:pointer; opacity:${isDimmed ? 0.3 : 1}; transition: top 0.2s, opacity 0.2s; white-space:nowrap; transform: translateY(-50%);">
+                <div style="width:4px; height:12px; background:${tc.bg}; border-radius:1px;"></div>
+                <div style="width:16px; display:flex; justify-content:center;">${Utils.getTeamLogoHtml(tName, '10px')}</div>
+                <span>${acronym}</span>
+            </div>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div style="max-width: 1000px; margin: 0 auto;">
+                <div class="standings-title" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+                    <span>Championship Rank Tracker</span>
+                </div>
+                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:2.5rem; width: 100%;">
+                    <div style="display: flex; gap: 0.5rem; height: 500px; width: 100%; position: relative;">
+                        <div style="flex: 1; position: relative;">
+                            <canvas id="${chartCanvasId}"></canvas>
+                        </div>
+                        <div style="width: 75px; position: relative; border-left: 1px solid var(--border);">
+                            ${legendItemsHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        window.highlightProfileChampLine = (pType, id) => {
+            const chart = window[`profileChampChartInst_${pType}`];
+            if (!chart) return;
+            chart.data.datasets.forEach(ds => {
+                const isTarget = String(ds._entityKey) === String(id);
+                if (isTarget) {
+                    ds.borderColor = Utils.convertHexToRGBA(ds._origColor, 1.0);
+                    ds.borderWidth = 5;
+                    ds.order = 0; 
+                } else {
+                    ds.borderColor = Utils.convertHexToRGBA(ds._origColor, isLight ? 0.1 : 0.05);
+                    ds.borderWidth = 1.5;
+                    ds.order = 1;
+                }
+            });
+            chart.update('none'); 
+
+            chart.data.datasets.forEach(ds => {
+                const itemId = `leg-prof-champ-${safeId(String(ds._entityKey))}`;
+                const item = document.getElementById(itemId);
+                if (item) {
+                    const isTarget = String(ds._entityKey) === String(id);
+                    item.style.opacity = isTarget ? '1' : '0.2';
+                }
+            });
+        };
+
+        window.resetProfileChampLines = (pType) => {
+            const chart = window[`profileChampChartInst_${pType}`];
+            if (!chart) return;
+            chart.data.datasets.forEach(ds => {
+                ds.borderColor = ds._origColor;
+                ds.borderWidth = ds._origWidth;
+                ds.order = ds._origOrder;
+            });
+            chart.update('none');
+
+            chart.data.datasets.forEach(ds => {
+                const isTarget = String(ds._entityKey) === String(entityId);
+                const itemId = `leg-prof-champ-${safeId(String(ds._entityKey))}`;
+                const item = document.getElementById(itemId);
+                if (item) item.style.opacity = isTarget ? '1' : '0.3';
+            });
+        };
+
+        const legendSyncPlugin = {
+            id: 'legendSync',
+            afterLayout(chart) {
+                const yAxis = chart.scales.y;
+                chart.data.datasets.forEach(ds => {
+                    const itemId = `leg-prof-champ-${safeId(String(ds._entityKey))}`;
+                    const item = document.getElementById(itemId);
+                    
+                    let lastVal = null;
+                    for (let i = ds.data.length - 1; i >= 0; i--) {
+                        if (ds.data[i] !== null) { lastVal = ds.data[i]; break; }
+                    }
+                    
+                    if (item && lastVal !== null) {
+                        const yPixel = yAxis.getPixelForValue(lastVal);
+                        item.style.top = `${yPixel}px`;
+                        item.style.display = 'flex';
+                    } else if (item) {
+                        item.style.display = 'none';
+                    }
+                });
+            }
+        };
+
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'nearest', axis: 'xy', intersect: false },
+            onHover: (e, elements, chart) => {
+                if (elements && elements.length) {
+                    window.highlightProfileChampLine(type, chart.data.datasets[elements[0].datasetIndex]._entityKey);
+                }
+            },
+            plugins: {
+                legend: { display: false }, 
+                tooltip: { 
+                    titleFont: { family: 'Barlow Condensed', size: 14 }, 
+                    bodyFont: { family: 'Barlow Condensed', size: 13, weight: 600 },
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            if (context.parsed.y !== null) {
+                                label += 'P' + context.parsed.y;
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { color: tickColor, font: { family: 'Barlow Condensed', weight: 600 } }, grid: { color: gridColor } },
+                y: { 
+                    reverse: true, min: 1, max: activeEntities.length,
+                    title: { display: true, text: 'Championship Rank', color: tickColor, font: { family: 'Barlow Condensed' } }, 
+                    grid: { color: gridColor }, 
+                    ticks: { stepSize: 1, color: tickColor, callback: v => 'P' + v, font: { family: 'Barlow Condensed', weight: 700 } } 
+                }
+            }
+        };
+
+        if (window[`profileChampChartInst_${type}`]) window[`profileChampChartInst_${type}`].destroy();
+        window[`profileChampChartInst_${type}`] = new Chart(document.getElementById(chartCanvasId).getContext('2d'), {
+            type: 'line', data: { labels, datasets }, options: chartOptions, plugins: [legendSyncPlugin]
+        });
+
+        document.getElementById(chartCanvasId).onmouseleave = () => window.resetProfileChampLines(type);
+
+    } catch(e) {
+        console.error(e);
+        container.innerHTML = `<div class="error-msg">Failed to load championship timeline: ${e.message}</div>`;
     }
 };
 

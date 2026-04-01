@@ -137,22 +137,22 @@
                 </div>
               </div>
 
-              <div style="max-width: 600px; margin: 0 auto;">
-                
+              <div style="max-width: 1000px; margin: 0 auto;">
                 <div class="standings-title" style="margin-bottom: 0.5rem; text-align: left;">Sector Comparison</div>
-                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; margin-bottom:1.5rem; text-align:center; position: relative;">
-                  
-                  <button id="dom-toggle-times-btn" class="theme-toggle" onclick="toggleMiniSectors()" style="position: absolute; top: 1.25rem; right: 1.25rem; padding: 0.3rem 0.8rem; z-index: 10;">Show Sector Times</button>
-
-                  <div id="dom-analysis" class="stats-bar" style="margin-bottom:1.5rem; justify-content:flex-start; gap: 3rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border); text-align: left;"></div>
-
-                  <canvas id="trackMapCanvas" width="800" height="400" style="max-width:100%; height:auto; margin: 0 auto; display: block;"></canvas>
-                  <div id="dom-map-legend" style="display:flex; justify-content:center; gap:1.5rem; margin-top:1.5rem; font-family:'Barlow Condensed'; font-size:0.9rem; font-weight:700;"></div>
-                </div>
                 
-                <div id="dom-mini-sectors-wrapper" style="display:none; margin-bottom: 1.5rem;">
-                  <div class="standings-title" style="margin-bottom: 0.5rem; text-align: center;">Mini Sector Times (Seconds)</div>
-                  <div id="dom-mini-sectors" style="background:var(--surface); border:1px solid var(--border); border-radius:4px; overflow:hidden;"></div>
+                <div style="display: flex; gap: 1.5rem; align-items: flex-start; justify-content: center; flex-wrap: wrap;">
+                  
+                  <div style="flex: 1; min-width: 400px; max-width: 600px; background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1.5rem 1rem; text-align:center; position: relative;">
+                    <button id="dom-toggle-times-btn" class="theme-toggle" onclick="window.toggleMiniSectors('dom')" style="position: absolute; top: 1.25rem; right: 1.25rem; padding: 0.3rem 0.8rem; z-index: 10;">Show Sector Times</button>
+                    <div id="dom-analysis" class="stats-bar" style="margin-bottom:1.5rem; justify-content:flex-start; gap: 3rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border); text-align: left;"></div>
+                    <canvas id="trackMapCanvas" width="800" height="400" style="max-width:100%; height:auto; margin: 0 auto; display: block;"></canvas>
+                    <div id="dom-map-legend" style="display:flex; justify-content:center; gap:1.5rem; margin-top:1.5rem; font-family:'Barlow Condensed'; font-size:0.9rem; font-weight:700;"></div>
+                  </div>
+                  
+                  <div id="dom-mini-sectors-wrapper" style="display:none; width: 320px; flex-shrink: 0;">
+                    <div id="dom-mini-sectors" style="background:var(--surface); border:1px solid var(--border); border-radius:4px; overflow-y:auto; max-height: 535px;"></div>
+                  </div>
+
                 </div>
               </div>
 
